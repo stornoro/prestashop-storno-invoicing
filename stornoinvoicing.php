@@ -446,6 +446,7 @@ class StornoInvoicing extends Module
                 'internalNote' => 'PrestaShop #' . $order->reference,
                 'orderNumber' => $order->reference,
                 'idempotencyKey' => 'ps-' . $order->reference . '-' . $order->id,
+                'autoApplyVatRules' => true,
                 'lines' => $lines,
             ];
 
