@@ -17,11 +17,46 @@ require_once dirname(__FILE__) . '/classes/StornoApi.php';
 
 class StornoInvoicing extends Module
 {
+    /** All configuration keys used by this module */
+    const CONFIG_KEYS = [
+        // Connection
+        'STORNO_API_URL',
+        'STORNO_API_KEY',
+        'STORNO_COMPANY_ID',
+        // Invoice behavior
+        'STORNO_TRIGGER_STATUS',
+        'STORNO_AUTO_ISSUE',
+        'STORNO_AUTO_APPLY_VAT_RULES',
+        'STORNO_DOCUMENT_SERIES_ID',
+        'STORNO_INVOICE_LANGUAGE',
+        'STORNO_PAYMENT_TERM_DAYS',
+        'STORNO_DEFAULT_VAT_RATE',
+        'STORNO_SHIPPING_VAT_RATE',
+        'STORNO_DEFAULT_UNIT',
+        // Line descriptions
+        'STORNO_SHIPPING_LABEL',
+        'STORNO_DISCOUNT_LABEL',
+        'STORNO_WRAPPING_LABEL',
+        // Invoice content
+        'STORNO_INVOICE_NOTES',
+        'STORNO_INTERNAL_NOTE_FORMAT',
+        // Payment method mapping
+        'STORNO_PM_WIREPAYMENT',
+        'STORNO_PM_CHECKPAYMENT',
+        'STORNO_PM_CASHONDELIVERY',
+        'STORNO_PM_STRIPE',
+        'STORNO_PM_PAYPAL',
+        'STORNO_PM_DEFAULT',
+        // Webhook
+        'STORNO_WEBHOOK_SECRET',
+        'STORNO_WEBHOOK_ID',
+    ];
+
     public function __construct()
     {
         $this->name = 'stornoinvoicing';
         $this->tab = 'billing_invoicing';
-        $this->version = '1.0.0';
+        $this->version = '1.1.0';
         $this->author = 'Storno';
         $this->need_instance = 0;
         $this->ps_versions_compliancy = ['min' => '1.7.0.0', 'max' => '8.99.99'];
@@ -40,10 +75,26 @@ class StornoInvoicing extends Module
             return false;
         }
 
-        // Create database tables
         include dirname(__FILE__) . '/sql/install.php';
 
-        // Register hooks
+        // Set defaults
+        Configuration::updateValue('STORNO_AUTO_ISSUE', 1);
+        Configuration::updateValue('STORNO_AUTO_APPLY_VAT_RULES', 1);
+        Configuration::updateValue('STORNO_PAYMENT_TERM_DAYS', 30);
+        Configuration::updateValue('STORNO_DEFAULT_VAT_RATE', 21);
+        Configuration::updateValue('STORNO_SHIPPING_VAT_RATE', 21);
+        Configuration::updateValue('STORNO_DEFAULT_UNIT', 'buc');
+        Configuration::updateValue('STORNO_SHIPPING_LABEL', 'Transport');
+        Configuration::updateValue('STORNO_DISCOUNT_LABEL', 'Discount');
+        Configuration::updateValue('STORNO_WRAPPING_LABEL', 'Ambalare cadou');
+        Configuration::updateValue('STORNO_INTERNAL_NOTE_FORMAT', 'PrestaShop #{reference}');
+        Configuration::updateValue('STORNO_PM_WIREPAYMENT', 'bank_transfer');
+        Configuration::updateValue('STORNO_PM_CHECKPAYMENT', 'cheque');
+        Configuration::updateValue('STORNO_PM_CASHONDELIVERY', 'cash');
+        Configuration::updateValue('STORNO_PM_STRIPE', 'card');
+        Configuration::updateValue('STORNO_PM_PAYPAL', 'card');
+        Configuration::updateValue('STORNO_PM_DEFAULT', 'other');
+
         return $this->registerHook('actionValidateOrder')
             && $this->registerHook('actionOrderStatusPostUpdate')
             && $this->registerHook('displayAdminOrder')
@@ -54,15 +105,9 @@ class StornoInvoicing extends Module
     {
         include dirname(__FILE__) . '/sql/uninstall.php';
 
-        Configuration::deleteByName('STORNO_API_URL');
-        Configuration::deleteByName('STORNO_API_KEY');
-        Configuration::deleteByName('STORNO_COMPANY_ID');
-        Configuration::deleteByName('STORNO_WEBHOOK_SECRET');
-        Configuration::deleteByName('STORNO_WEBHOOK_ID');
-        Configuration::deleteByName('STORNO_AUTO_ISSUE');
-        Configuration::deleteByName('STORNO_DEFAULT_VAT_RATE');
-        Configuration::deleteByName('STORNO_SHIPPING_VAT_RATE');
-        Configuration::deleteByName('STORNO_TRIGGER_STATUS');
+        foreach (self::CONFIG_KEYS as $key) {
+            Configuration::deleteByName($key);
+        }
 
         return parent::uninstall();
     }
@@ -73,32 +118,37 @@ class StornoInvoicing extends Module
     {
         $output = '';
 
-        if (Tools::isSubmit('submitStornoSettings')) {
-            $output .= $this->postProcess();
+        if (Tools::isSubmit('submitStornoConnection')) {
+            $output .= $this->saveConnectionSettings();
         }
-
+        if (Tools::isSubmit('submitStornoInvoice')) {
+            $output .= $this->saveInvoiceSettings();
+        }
+        if (Tools::isSubmit('submitStornoLabels')) {
+            $output .= $this->saveLabelSettings();
+        }
+        if (Tools::isSubmit('submitStornoPayments')) {
+            $output .= $this->savePaymentSettings();
+        }
         if (Tools::isSubmit('submitStornoRegisterWebhook')) {
             $output .= $this->registerWebhook();
         }
-
         if (Tools::isSubmit('submitStornoTestConnection')) {
             $output .= $this->testConnection();
         }
 
-        return $output . $this->renderForm();
+        return $output
+            . $this->renderConnectionForm()
+            . $this->renderInvoiceForm()
+            . $this->renderLabelForm()
+            . $this->renderPaymentForm()
+            . $this->renderActionButtons();
     }
 
-    private function postProcess()
+    private function saveConnectionSettings()
     {
-        $fields = [
-            'STORNO_API_URL' => 'API URL',
-            'STORNO_API_KEY' => 'API Key',
-            'STORNO_COMPANY_ID' => 'Company UUID',
-        ];
-
-        foreach ($fields as $key => $label) {
-            $value = Tools::getValue($key);
-            if (empty($value)) {
+        foreach (['STORNO_API_URL' => 'API URL', 'STORNO_API_KEY' => 'API Key', 'STORNO_COMPANY_ID' => 'Company UUID'] as $key => $label) {
+            if (empty(Tools::getValue($key))) {
                 return $this->displayError($this->l($label . ' is required.'));
             }
         }
@@ -106,20 +156,57 @@ class StornoInvoicing extends Module
         Configuration::updateValue('STORNO_API_URL', Tools::getValue('STORNO_API_URL'));
         Configuration::updateValue('STORNO_API_KEY', Tools::getValue('STORNO_API_KEY'));
         Configuration::updateValue('STORNO_COMPANY_ID', Tools::getValue('STORNO_COMPANY_ID'));
+
+        return $this->displayConfirmation($this->l('Connection settings saved.'));
+    }
+
+    private function saveInvoiceSettings()
+    {
+        Configuration::updateValue('STORNO_TRIGGER_STATUS', (int) Tools::getValue('STORNO_TRIGGER_STATUS'));
         Configuration::updateValue('STORNO_AUTO_ISSUE', (int) Tools::getValue('STORNO_AUTO_ISSUE'));
+        Configuration::updateValue('STORNO_AUTO_APPLY_VAT_RULES', (int) Tools::getValue('STORNO_AUTO_APPLY_VAT_RULES'));
+        Configuration::updateValue('STORNO_DOCUMENT_SERIES_ID', Tools::getValue('STORNO_DOCUMENT_SERIES_ID'));
+        Configuration::updateValue('STORNO_INVOICE_LANGUAGE', Tools::getValue('STORNO_INVOICE_LANGUAGE'));
+        Configuration::updateValue('STORNO_PAYMENT_TERM_DAYS', (int) Tools::getValue('STORNO_PAYMENT_TERM_DAYS'));
         Configuration::updateValue('STORNO_DEFAULT_VAT_RATE', (float) Tools::getValue('STORNO_DEFAULT_VAT_RATE'));
         Configuration::updateValue('STORNO_SHIPPING_VAT_RATE', (float) Tools::getValue('STORNO_SHIPPING_VAT_RATE'));
-        Configuration::updateValue('STORNO_TRIGGER_STATUS', (int) Tools::getValue('STORNO_TRIGGER_STATUS'));
+        Configuration::updateValue('STORNO_DEFAULT_UNIT', Tools::getValue('STORNO_DEFAULT_UNIT'));
+        Configuration::updateValue('STORNO_INVOICE_NOTES', Tools::getValue('STORNO_INVOICE_NOTES'));
+        Configuration::updateValue('STORNO_INTERNAL_NOTE_FORMAT', Tools::getValue('STORNO_INTERNAL_NOTE_FORMAT'));
 
-        return $this->displayConfirmation($this->l('Settings saved successfully.'));
+        return $this->displayConfirmation($this->l('Invoice settings saved.'));
+    }
+
+    private function saveLabelSettings()
+    {
+        Configuration::updateValue('STORNO_SHIPPING_LABEL', Tools::getValue('STORNO_SHIPPING_LABEL'));
+        Configuration::updateValue('STORNO_DISCOUNT_LABEL', Tools::getValue('STORNO_DISCOUNT_LABEL'));
+        Configuration::updateValue('STORNO_WRAPPING_LABEL', Tools::getValue('STORNO_WRAPPING_LABEL'));
+
+        return $this->displayConfirmation($this->l('Label settings saved.'));
+    }
+
+    private function savePaymentSettings()
+    {
+        Configuration::updateValue('STORNO_PM_WIREPAYMENT', Tools::getValue('STORNO_PM_WIREPAYMENT'));
+        Configuration::updateValue('STORNO_PM_CHECKPAYMENT', Tools::getValue('STORNO_PM_CHECKPAYMENT'));
+        Configuration::updateValue('STORNO_PM_CASHONDELIVERY', Tools::getValue('STORNO_PM_CASHONDELIVERY'));
+        Configuration::updateValue('STORNO_PM_STRIPE', Tools::getValue('STORNO_PM_STRIPE'));
+        Configuration::updateValue('STORNO_PM_PAYPAL', Tools::getValue('STORNO_PM_PAYPAL'));
+        Configuration::updateValue('STORNO_PM_DEFAULT', Tools::getValue('STORNO_PM_DEFAULT'));
+
+        return $this->displayConfirmation($this->l('Payment method mapping saved.'));
     }
 
     private function testConnection()
     {
         try {
             $api = $this->getApi();
-            $api->listCompanies();
-            return $this->displayConfirmation($this->l('Connection successful! API key is valid.'));
+            $companies = $api->listCompanies();
+            $names = array_map(function ($c) { return $c['name'] ?? $c['id']; }, $companies);
+            return $this->displayConfirmation(
+                $this->l('Connection successful! Companies: ') . implode(', ', $names)
+            );
         } catch (\Exception $e) {
             return $this->displayError($this->l('Connection failed: ') . $e->getMessage());
         }
@@ -129,12 +216,7 @@ class StornoInvoicing extends Module
     {
         try {
             $api = $this->getApi();
-            $webhookUrl = Context::getContext()->link->getModuleLink(
-                $this->name,
-                'webhook',
-                [],
-                true
-            );
+            $webhookUrl = Context::getContext()->link->getModuleLink($this->name, 'webhook', [], true);
 
             $result = $api->createWebhook([
                 'url' => $webhookUrl,
@@ -153,140 +235,291 @@ class StornoInvoicing extends Module
             Configuration::updateValue('STORNO_WEBHOOK_ID', $result['uuid']);
 
             return $this->displayConfirmation(
-                $this->l('Webhook registered successfully at: ') . $webhookUrl
+                $this->l('Webhook registered at: ') . $webhookUrl
             );
         } catch (\Exception $e) {
             return $this->displayError($this->l('Webhook registration failed: ') . $e->getMessage());
         }
     }
 
-    private function renderForm()
-    {
-        $orderStatuses = OrderState::getOrderStates($this->context->language->id);
-        $statusOptions = [];
-        foreach ($orderStatuses as $status) {
-            $statusOptions[] = [
-                'id' => $status['id_order_state'],
-                'name' => $status['name'],
-            ];
-        }
+    // ─── Form: Connection ────────────────────────────────────────
 
-        $fields_form = [
-            [
-                'form' => [
-                    'legend' => [
-                        'title' => $this->l('Storno API Settings'),
-                        'icon' => 'icon-cogs',
+    private function renderConnectionForm()
+    {
+        $fields = [
+            'form' => [
+                'legend' => ['title' => $this->l('API Connection'), 'icon' => 'icon-plug'],
+                'input' => [
+                    [
+                        'type' => 'text',
+                        'label' => $this->l('API URL'),
+                        'name' => 'STORNO_API_URL',
+                        'desc' => $this->l('URL-ul instantei Storno self-hosted (ex: https://factura.domeniu.ro).') . ' <a href="https://docs.storno.ro/getting-started/self-hosting" target="_blank">Ghid instalare</a>',
+                        'required' => true,
+                        'class' => 'fixed-width-xxl',
                     ],
-                    'input' => [
-                        [
-                            'type' => 'text',
-                            'label' => $this->l('API URL'),
-                            'name' => 'STORNO_API_URL',
-                            'desc' => $this->l('Your Storno instance URL, e.g. https://factura.domeniu.ro'),
-                            'required' => true,
-                            'class' => 'fixed-width-xxl',
-                        ],
-                        [
-                            'type' => 'text',
-                            'label' => $this->l('API Key'),
-                            'name' => 'STORNO_API_KEY',
-                            'desc' => $this->l('API token starting with af_... (created in Storno → Settings → API Keys)'),
-                            'required' => true,
-                            'class' => 'fixed-width-xxl',
-                        ],
-                        [
-                            'type' => 'text',
-                            'label' => $this->l('Company UUID'),
-                            'name' => 'STORNO_COMPANY_ID',
-                            'desc' => $this->l('The UUID of the company to create invoices for.'),
-                            'required' => true,
-                            'class' => 'fixed-width-xxl',
-                        ],
+                    [
+                        'type' => 'text',
+                        'label' => $this->l('API Key'),
+                        'name' => 'STORNO_API_KEY',
+                        'desc' => $this->l('Token-ul API care incepe cu af_... Creati-l din Storno → Setari → Chei API.') . ' <a href="https://docs.storno.ro/api-reference/api-keys/create" target="_blank">Cum creez o cheie API</a> | <a href="https://docs.storno.ro/api-reference/api-keys/scopes" target="_blank">Scopuri necesare</a>',
+                        'required' => true,
+                        'class' => 'fixed-width-xxl',
                     ],
-                    'submit' => [
-                        'title' => $this->l('Save Settings'),
+                    [
+                        'type' => 'text',
+                        'label' => $this->l('Company UUID'),
+                        'name' => 'STORNO_COMPANY_ID',
+                        'desc' => $this->l('UUID-ul companiei pentru care se emit facturi. Il gasiti in Storno → Setari → Companie.') . ' <a href="https://docs.storno.ro/api-reference/companies/list" target="_blank">Documentatie companii</a>',
+                        'required' => true,
+                        'class' => 'fixed-width-xxl',
                     ],
                 ],
-            ],
-            [
-                'form' => [
-                    'legend' => [
-                        'title' => $this->l('Invoice Settings'),
-                        'icon' => 'icon-file-text-o',
-                    ],
-                    'input' => [
-                        [
-                            'type' => 'select',
-                            'label' => $this->l('Trigger on Order Status'),
-                            'name' => 'STORNO_TRIGGER_STATUS',
-                            'desc' => $this->l('Create the Storno invoice when the order reaches this status. Default: Payment accepted.'),
-                            'options' => [
-                                'query' => $statusOptions,
-                                'id' => 'id',
-                                'name' => 'name',
-                            ],
-                        ],
-                        [
-                            'type' => 'switch',
-                            'label' => $this->l('Auto-issue invoices'),
-                            'name' => 'STORNO_AUTO_ISSUE',
-                            'desc' => $this->l('Automatically issue the invoice (assign number, generate PDF/XML) after creation. e-Factura submission is handled by Storno based on the company settings (Settings → e-Factura delay).'),
-                            'is_bool' => true,
-                            'values' => [
-                                ['id' => 'active_on', 'value' => 1, 'label' => $this->l('Yes')],
-                                ['id' => 'active_off', 'value' => 0, 'label' => $this->l('No')],
-                            ],
-                        ],
-                        [
-                            'type' => 'text',
-                            'label' => $this->l('Default VAT Rate (%)'),
-                            'name' => 'STORNO_DEFAULT_VAT_RATE',
-                            'desc' => $this->l('Fallback VAT rate if product tax rate is not set.'),
-                            'class' => 'fixed-width-sm',
-                            'suffix' => '%',
-                        ],
-                        [
-                            'type' => 'text',
-                            'label' => $this->l('Shipping VAT Rate (%)'),
-                            'name' => 'STORNO_SHIPPING_VAT_RATE',
-                            'desc' => $this->l('VAT rate applied to shipping costs.'),
-                            'class' => 'fixed-width-sm',
-                            'suffix' => '%',
-                        ],
-                    ],
-                    'submit' => [
-                        'title' => $this->l('Save Settings'),
-                    ],
-                ],
+                'submit' => ['title' => $this->l('Save Connection')],
             ],
         ];
 
-        $helper = new HelperForm();
-        $helper->module = $this;
-        $helper->name_controller = $this->name;
-        $helper->token = Tools::getAdminTokenLite('AdminModules');
-        $helper->currentIndex = AdminController::$currentIndex . '&configure=' . $this->name;
-        $helper->submit_action = 'submitStornoSettings';
-        $helper->default_form_language = (int) Configuration::get('PS_LANG_DEFAULT');
-
-        $helper->fields_value = [
+        return $this->buildHelper('submitStornoConnection', $fields, [
             'STORNO_API_URL' => Configuration::get('STORNO_API_URL'),
             'STORNO_API_KEY' => Configuration::get('STORNO_API_KEY'),
             'STORNO_COMPANY_ID' => Configuration::get('STORNO_COMPANY_ID'),
-            'STORNO_AUTO_ISSUE' => Configuration::get('STORNO_AUTO_ISSUE'),
-            'STORNO_DEFAULT_VAT_RATE' => Configuration::get('STORNO_DEFAULT_VAT_RATE') ?: '21',
-            'STORNO_SHIPPING_VAT_RATE' => Configuration::get('STORNO_SHIPPING_VAT_RATE') ?: '21',
-            'STORNO_TRIGGER_STATUS' => Configuration::get('STORNO_TRIGGER_STATUS') ?: 2,
+        ]);
+    }
+
+    // ─── Form: Invoice Settings ──────────────────────────────────
+
+    private function renderInvoiceForm()
+    {
+        $orderStatuses = OrderState::getOrderStates($this->context->language->id);
+        $statusOptions = [];
+        foreach ($orderStatuses as $s) {
+            $statusOptions[] = ['id' => $s['id_order_state'], 'name' => $s['name']];
+        }
+
+        // Fetch document series from API (cached on page load)
+        $seriesOptions = [['id' => '', 'name' => $this->l('-- Default (auto) --')]];
+        try {
+            $api = $this->getApi();
+            $series = $api->listDocumentSeries();
+            foreach ($series as $s) {
+                $label = ($s['prefix'] ?? '') . ' — ' . ($s['name'] ?? $s['id']);
+                $seriesOptions[] = ['id' => $s['id'], 'name' => $label];
+            }
+        } catch (\Exception $e) {
+            // API not configured yet — show only default
+        }
+
+        $languageOptions = [
+            ['id' => '', 'name' => $this->l('-- Default (from Storno) --')],
+            ['id' => 'ro', 'name' => 'Romana'],
+            ['id' => 'en', 'name' => 'English'],
+            ['id' => 'de', 'name' => 'Deutsch'],
+            ['id' => 'fr', 'name' => 'Francais'],
         ];
 
-        $output = $helper->generateForm($fields_form);
+        $fields = [
+            'form' => [
+                'legend' => ['title' => $this->l('Invoice Settings'), 'icon' => 'icon-file-text-o'],
+                'input' => [
+                    [
+                        'type' => 'select',
+                        'label' => $this->l('Trigger on Order Status'),
+                        'name' => 'STORNO_TRIGGER_STATUS',
+                        'desc' => $this->l('Factura se creeaza cand comanda ajunge la acest status (ex: Expediata). Pana atunci, nu se trimite nimic catre Storno.'),
+                        'options' => ['query' => $statusOptions, 'id' => 'id', 'name' => 'name'],
+                    ],
+                    [
+                        'type' => 'switch',
+                        'label' => $this->l('Auto-issue invoices'),
+                        'name' => 'STORNO_AUTO_ISSUE',
+                        'desc' => $this->l('Emite factura automat dupa creare: ii atribuie numar din serie, genereaza PDF si XML. Trimiterea la e-Factura ANAF este controlata din setarile companiei in Storno.') . ' <a href="https://docs.storno.ro/concepts/document-lifecycle" target="_blank">Ciclul de viata al facturii</a>',
+                        'is_bool' => true,
+                        'values' => [
+                            ['id' => 'active_on', 'value' => 1, 'label' => $this->l('Yes')],
+                            ['id' => 'active_off', 'value' => 0, 'label' => $this->l('No')],
+                        ],
+                    ],
+                    [
+                        'type' => 'switch',
+                        'label' => $this->l('Auto-apply VAT rules'),
+                        'name' => 'STORNO_AUTO_APPLY_VAT_RULES',
+                        'desc' => $this->l('Storno aplica automat regulile de TVA: taxare inversa (0% pentru clienti EU cu VIES valid), rate OSS pentru vanzari intracomunitare, si scutire la export non-EU.') . ' <a href="https://docs.storno.ro/concepts/einvoice-integration" target="_blank">Integrare e-Factura</a>',
+                        'is_bool' => true,
+                        'values' => [
+                            ['id' => 'active_on', 'value' => 1, 'label' => $this->l('Yes')],
+                            ['id' => 'active_off', 'value' => 0, 'label' => $this->l('No')],
+                        ],
+                    ],
+                    [
+                        'type' => 'select',
+                        'label' => $this->l('Document Series'),
+                        'name' => 'STORNO_DOCUMENT_SERIES_ID',
+                        'desc' => $this->l('Seria de numerotare a facturilor. Lasati implicit pentru a folosi seria implicita a companiei din Storno.') . ' <a href="https://docs.storno.ro/concepts/series-numbering" target="_blank">Cum functioneaza seriile</a>',
+                        'options' => ['query' => $seriesOptions, 'id' => 'id', 'name' => 'name'],
+                    ],
+                    [
+                        'type' => 'select',
+                        'label' => $this->l('Invoice Language'),
+                        'name' => 'STORNO_INVOICE_LANGUAGE',
+                        'desc' => $this->l('Limba in care se genereaza PDF-ul facturii. Lasati implicit pentru a folosi limba din Storno.') . ' <a href="https://docs.storno.ro/api-reference/invoices/create" target="_blank">Documentatie creare factura</a>',
+                        'options' => ['query' => $languageOptions, 'id' => 'id', 'name' => 'name'],
+                    ],
+                    [
+                        'type' => 'text',
+                        'label' => $this->l('Payment Term (days)'),
+                        'name' => 'STORNO_PAYMENT_TERM_DAYS',
+                        'desc' => $this->l('Numarul de zile de la data emiterii pana la scadenta. Exemplu: 30 = scadenta la 30 de zile de la emitere.'),
+                        'class' => 'fixed-width-sm',
+                        'suffix' => $this->l('days'),
+                    ],
+                    [
+                        'type' => 'text',
+                        'label' => $this->l('Default VAT Rate (%)'),
+                        'name' => 'STORNO_DEFAULT_VAT_RATE',
+                        'desc' => $this->l('Rata TVA implicita cand un produs din PrestaShop nu are taxa configurata. Se foloseste ca fallback. TVA-ul final poate fi suprascris de regulile automate (taxare inversa, OSS).') . ' <a href="https://docs.storno.ro/api-reference/vat-rates/list" target="_blank">Rate TVA in Storno</a>',
+                        'class' => 'fixed-width-sm',
+                        'suffix' => '%',
+                    ],
+                    [
+                        'type' => 'text',
+                        'label' => $this->l('Shipping VAT Rate (%)'),
+                        'name' => 'STORNO_SHIPPING_VAT_RATE',
+                        'desc' => $this->l('Rata TVA aplicata liniei de transport. Se aplica numai cand transportul are cost > 0.'),
+                        'class' => 'fixed-width-sm',
+                        'suffix' => '%',
+                    ],
+                    [
+                        'type' => 'text',
+                        'label' => $this->l('Default Unit of Measure'),
+                        'name' => 'STORNO_DEFAULT_UNIT',
+                        'desc' => $this->l('Unitatea de masura afisata pe liniile facturii. Exemple: buc (bucati), kg, ora, m, l, set.'),
+                        'class' => 'fixed-width-md',
+                    ],
+                    [
+                        'type' => 'textarea',
+                        'label' => $this->l('Invoice Notes'),
+                        'name' => 'STORNO_INVOICE_NOTES',
+                        'desc' => $this->l('Note publice afisate pe fiecare factura (ex: detalii bancare, mesaj de multumire). Lasati gol pentru a folosi notele implicite din Storno.'),
+                        'rows' => 3,
+                        'cols' => 60,
+                    ],
+                    [
+                        'type' => 'text',
+                        'label' => $this->l('Internal Note Format'),
+                        'name' => 'STORNO_INTERNAL_NOTE_FORMAT',
+                        'desc' => $this->l('Formatul notei interne (vizibila doar in Storno, nu pe factura). Folositi {reference} pentru referinta comenzii si {id} pentru ID-ul comenzii. Exemplu: PrestaShop #{reference}'),
+                        'class' => 'fixed-width-xxl',
+                    ],
+                ],
+                'submit' => ['title' => $this->l('Save Invoice Settings')],
+            ],
+        ];
 
-        // Add action buttons
-        $output .= $this->renderActionButtons();
-
-        return $output;
+        return $this->buildHelper('submitStornoInvoice', $fields, [
+            'STORNO_TRIGGER_STATUS' => Configuration::get('STORNO_TRIGGER_STATUS') ?: 2,
+            'STORNO_AUTO_ISSUE' => Configuration::get('STORNO_AUTO_ISSUE'),
+            'STORNO_AUTO_APPLY_VAT_RULES' => Configuration::get('STORNO_AUTO_APPLY_VAT_RULES'),
+            'STORNO_DOCUMENT_SERIES_ID' => Configuration::get('STORNO_DOCUMENT_SERIES_ID'),
+            'STORNO_INVOICE_LANGUAGE' => Configuration::get('STORNO_INVOICE_LANGUAGE'),
+            'STORNO_PAYMENT_TERM_DAYS' => Configuration::get('STORNO_PAYMENT_TERM_DAYS') ?: 30,
+            'STORNO_DEFAULT_VAT_RATE' => Configuration::get('STORNO_DEFAULT_VAT_RATE') ?: '21',
+            'STORNO_SHIPPING_VAT_RATE' => Configuration::get('STORNO_SHIPPING_VAT_RATE') ?: '21',
+            'STORNO_DEFAULT_UNIT' => Configuration::get('STORNO_DEFAULT_UNIT') ?: 'buc',
+            'STORNO_INVOICE_NOTES' => Configuration::get('STORNO_INVOICE_NOTES'),
+            'STORNO_INTERNAL_NOTE_FORMAT' => Configuration::get('STORNO_INTERNAL_NOTE_FORMAT') ?: 'PrestaShop #{reference}',
+        ]);
     }
+
+    // ─── Form: Line Labels ───────────────────────────────────────
+
+    private function renderLabelForm()
+    {
+        $fields = [
+            'form' => [
+                'legend' => ['title' => $this->l('Invoice Line Labels'), 'icon' => 'icon-tag'],
+                'input' => [
+                    [
+                        'type' => 'text',
+                        'label' => $this->l('Shipping Line'),
+                        'name' => 'STORNO_SHIPPING_LABEL',
+                        'desc' => $this->l('Descrierea liniei de transport pe factura. Apare ca linie separata cand comanda are cost de livrare.'),
+                        'class' => 'fixed-width-xl',
+                    ],
+                    [
+                        'type' => 'text',
+                        'label' => $this->l('Discount Line'),
+                        'name' => 'STORNO_DISCOUNT_LABEL',
+                        'desc' => $this->l('Descrierea liniei de discount pe factura. Apare ca linie cu valoare negativa cand comanda are reduceri (reguli cos, vouchere).'),
+                        'class' => 'fixed-width-xl',
+                    ],
+                    [
+                        'type' => 'text',
+                        'label' => $this->l('Gift Wrapping Line'),
+                        'name' => 'STORNO_WRAPPING_LABEL',
+                        'desc' => $this->l('Descrierea liniei de ambalare cadou. Apare doar cand clientul a selectat ambalare cadou in cos.'),
+                        'class' => 'fixed-width-xl',
+                    ],
+                ],
+                'submit' => ['title' => $this->l('Save Labels')],
+            ],
+        ];
+
+        return $this->buildHelper('submitStornoLabels', $fields, [
+            'STORNO_SHIPPING_LABEL' => Configuration::get('STORNO_SHIPPING_LABEL') ?: 'Transport',
+            'STORNO_DISCOUNT_LABEL' => Configuration::get('STORNO_DISCOUNT_LABEL') ?: 'Discount',
+            'STORNO_WRAPPING_LABEL' => Configuration::get('STORNO_WRAPPING_LABEL') ?: 'Ambalare cadou',
+        ]);
+    }
+
+    // ─── Form: Payment Method Mapping ────────────────────────────
+
+    private function renderPaymentForm()
+    {
+        $paymentOptions = [
+            ['id' => 'bank_transfer', 'name' => $this->l('Bank Transfer')],
+            ['id' => 'cash', 'name' => $this->l('Cash')],
+            ['id' => 'card', 'name' => $this->l('Card')],
+            ['id' => 'cheque', 'name' => $this->l('Cheque')],
+            ['id' => 'other', 'name' => $this->l('Other')],
+        ];
+
+        $makeSelect = function ($label, $name, $desc) use ($paymentOptions) {
+            return [
+                'type' => 'select',
+                'label' => $this->l($label),
+                'name' => $name,
+                'desc' => $this->l($desc),
+                'options' => ['query' => $paymentOptions, 'id' => 'id', 'name' => 'name'],
+            ];
+        };
+
+        $fields = [
+            'form' => [
+                'legend' => ['title' => $this->l('Payment Method Mapping'), 'icon' => 'icon-credit-card'],
+                'description' => $this->l('Fiecare modul de plata din PrestaShop este mapat la o metoda de plata din Storno. Aceasta apare pe factura in campul "Metoda de plata".'),
+                'input' => [
+                    $makeSelect('Wire Payment (ps_wirepayment)', 'STORNO_PM_WIREPAYMENT', 'Bank transfer module'),
+                    $makeSelect('Check Payment (ps_checkpayment)', 'STORNO_PM_CHECKPAYMENT', 'Check payment module'),
+                    $makeSelect('Cash on Delivery (ps_cashondelivery)', 'STORNO_PM_CASHONDELIVERY', 'Cash on delivery module'),
+                    $makeSelect('Stripe', 'STORNO_PM_STRIPE', 'Stripe payment module'),
+                    $makeSelect('PayPal', 'STORNO_PM_PAYPAL', 'PayPal payment module'),
+                    $makeSelect('Default (other modules)', 'STORNO_PM_DEFAULT', 'Fallback for any unrecognized payment module'),
+                ],
+                'submit' => ['title' => $this->l('Save Payment Mapping')],
+            ],
+        ];
+
+        return $this->buildHelper('submitStornoPayments', $fields, [
+            'STORNO_PM_WIREPAYMENT' => Configuration::get('STORNO_PM_WIREPAYMENT') ?: 'bank_transfer',
+            'STORNO_PM_CHECKPAYMENT' => Configuration::get('STORNO_PM_CHECKPAYMENT') ?: 'cheque',
+            'STORNO_PM_CASHONDELIVERY' => Configuration::get('STORNO_PM_CASHONDELIVERY') ?: 'cash',
+            'STORNO_PM_STRIPE' => Configuration::get('STORNO_PM_STRIPE') ?: 'card',
+            'STORNO_PM_PAYPAL' => Configuration::get('STORNO_PM_PAYPAL') ?: 'card',
+            'STORNO_PM_DEFAULT' => Configuration::get('STORNO_PM_DEFAULT') ?: 'other',
+        ]);
+    }
+
+    // ─── Action Buttons ──────────────────────────────────────────
 
     private function renderActionButtons()
     {
@@ -299,22 +532,24 @@ class StornoInvoicing extends Module
 
         return '
         <div class="panel">
-            <div class="panel-heading"><i class="icon-link"></i> ' . $this->l('Actions') . '</div>
+            <div class="panel-heading"><i class="icon-link"></i> ' . $this->l('Actiuni') . '</div>
             <div class="form-wrapper">
                 <div class="row">
                     <div class="col-lg-6">
-                        <p><strong>' . $this->l('Webhook Status:') . '</strong> ' . $webhookStatus . '</p>
+                        <p><strong>' . $this->l('Webhook:') . '</strong> ' . $webhookStatus . '</p>
+                        <p class="help-block">' . $this->l('Webhook-ul permite Storno sa notifice PrestaShop cand o factura este validata/respinsa de ANAF sau cand se inregistreaza o plata.') . ' <a href="https://docs.storno.ro/concepts/webhooks-events" target="_blank">' . $this->l('Documentatie webhooks') . '</a></p>
                         <form method="post" action="' . $currentIndex . '&token=' . $token . '">
                             <button type="submit" name="submitStornoRegisterWebhook" class="btn btn-default">
-                                <i class="icon-refresh"></i> ' . $this->l('Register Webhook') . '
+                                <i class="icon-refresh"></i> ' . $this->l('Inregistreaza Webhook') . '
                             </button>
                         </form>
                     </div>
                     <div class="col-lg-6">
-                        <p><strong>' . $this->l('Test your API connection:') . '</strong></p>
+                        <p><strong>' . $this->l('Test conexiune API:') . '</strong></p>
+                        <p class="help-block">' . $this->l('Verifica daca API URL, API Key si Company UUID sunt corecte si Storno este accesibil.') . '</p>
                         <form method="post" action="' . $currentIndex . '&token=' . $token . '">
                             <button type="submit" name="submitStornoTestConnection" class="btn btn-default">
-                                <i class="icon-check"></i> ' . $this->l('Test Connection') . '
+                                <i class="icon-check"></i> ' . $this->l('Testeaza Conexiunea') . '
                             </button>
                         </form>
                     </div>
@@ -323,16 +558,28 @@ class StornoInvoicing extends Module
         </div>';
     }
 
+    // ─── Form Helper ─────────────────────────────────────────────
+
+    private function buildHelper($submitAction, $formDef, $values)
+    {
+        $helper = new HelperForm();
+        $helper->module = $this;
+        $helper->name_controller = $this->name;
+        $helper->token = Tools::getAdminTokenLite('AdminModules');
+        $helper->currentIndex = AdminController::$currentIndex . '&configure=' . $this->name;
+        $helper->submit_action = $submitAction;
+        $helper->default_form_language = (int) Configuration::get('PS_LANG_DEFAULT');
+        $helper->fields_value = $values;
+
+        return $helper->generateForm([$formDef]);
+    }
+
     // ─── Hooks ───────────────────────────────────────────────────
 
-    /**
-     * Create Storno invoice when order is validated (if trigger = actionValidateOrder)
-     */
     public function hookActionValidateOrder($params)
     {
         $triggerStatus = (int) Configuration::get('STORNO_TRIGGER_STATUS');
 
-        // Status 0 or not set means trigger on order validation directly
         if ($triggerStatus && $triggerStatus > 0) {
             return;
         }
@@ -340,9 +587,6 @@ class StornoInvoicing extends Module
         $this->processOrder($params['order']);
     }
 
-    /**
-     * Create Storno invoice when order reaches the configured status
-     */
     public function hookActionOrderStatusPostUpdate($params)
     {
         $triggerStatus = (int) Configuration::get('STORNO_TRIGGER_STATUS');
@@ -360,9 +604,6 @@ class StornoInvoicing extends Module
         $this->processOrder($order);
     }
 
-    /**
-     * Display Storno invoice info on admin order page
-     */
     public function hookDisplayAdminOrder($params)
     {
         $orderId = (int) ($params['id_order'] ?? 0);
@@ -371,8 +612,7 @@ class StornoInvoicing extends Module
         }
 
         $mapping = Db::getInstance()->getRow(
-            'SELECT * FROM ' . _DB_PREFIX_ . 'storno_invoices
-             WHERE id_order = ' . $orderId
+            'SELECT * FROM ' . _DB_PREFIX_ . 'storno_invoices WHERE id_order = ' . $orderId
         );
 
         if (!$mapping) {
@@ -391,9 +631,6 @@ class StornoInvoicing extends Module
         return $this->display(__FILE__, 'views/templates/hook/admin_order.tpl');
     }
 
-    /**
-     * Add CSS in back office
-     */
     public function hookDisplayBackOfficeHeader()
     {
         if (Tools::getValue('configure') === $this->name) {
@@ -405,7 +642,6 @@ class StornoInvoicing extends Module
 
     private function processOrder(Order $order)
     {
-        // Check if invoice already exists for this order
         $existing = Db::getInstance()->getValue(
             'SELECT storno_invoice_id FROM ' . _DB_PREFIX_ . 'storno_invoices
              WHERE id_order = ' . (int) $order->id
@@ -418,10 +654,7 @@ class StornoInvoicing extends Module
         if (!Configuration::get('STORNO_API_KEY') || !Configuration::get('STORNO_COMPANY_ID')) {
             PrestaShopLogger::addLog(
                 'Storno: Cannot create invoice - module not configured',
-                3,
-                null,
-                'Order',
-                $order->id
+                3, null, 'Order', $order->id
             );
             return;
         }
@@ -429,34 +662,53 @@ class StornoInvoicing extends Module
         try {
             $api = $this->getApi();
 
-            // 1. Create or find client
             $clientId = $this->ensureClient($api, $order);
-
-            // 2. Build invoice lines
             $lines = $this->buildInvoiceLines($order);
 
-            // 3. Create invoice
+            $paymentTermDays = (int) (Configuration::get('STORNO_PAYMENT_TERM_DAYS') ?: 30);
             $currency = new Currency($order->id_currency);
+
+            $internalNote = $this->formatInternalNote($order);
+
             $invoiceData = [
                 'clientId' => $clientId,
                 'issueDate' => date('Y-m-d'),
-                'dueDate' => date('Y-m-d', strtotime('+30 days')),
+                'dueDate' => date('Y-m-d', strtotime('+' . $paymentTermDays . ' days')),
                 'currency' => $currency->iso_code,
                 'paymentMethod' => $this->mapPaymentMethod($order->module),
-                'internalNote' => 'PrestaShop #' . $order->reference,
+                'internalNote' => $internalNote,
                 'orderNumber' => $order->reference,
                 'idempotencyKey' => 'ps-' . $order->reference . '-' . $order->id,
-                'autoApplyVatRules' => true,
                 'lines' => $lines,
             ];
+
+            // Optional fields — only send if configured
+            if (Configuration::get('STORNO_AUTO_APPLY_VAT_RULES')) {
+                $invoiceData['autoApplyVatRules'] = true;
+            }
+
+            $seriesId = Configuration::get('STORNO_DOCUMENT_SERIES_ID');
+            if ($seriesId) {
+                $invoiceData['documentSeriesId'] = $seriesId;
+            }
+
+            $language = Configuration::get('STORNO_INVOICE_LANGUAGE');
+            if ($language) {
+                $invoiceData['language'] = $language;
+            }
+
+            $notes = Configuration::get('STORNO_INVOICE_NOTES');
+            if ($notes) {
+                $invoiceData['notes'] = $notes;
+            }
 
             $result = $api->createInvoice($invoiceData);
             $invoiceId = $result['invoice']['id'];
             $invoiceNumber = $result['invoice']['number'] ?? '';
             $status = 'draft';
 
-            // 4. Auto-issue if enabled
-            // e-Factura submission is handled automatically by the Storno backend
+            // Auto-issue if enabled
+            // e-Factura submission is handled by the Storno backend
             // based on the company's efacturaDelayHours setting.
             if (Configuration::get('STORNO_AUTO_ISSUE')) {
                 $issueResult = $api->issueInvoice($invoiceId);
@@ -464,7 +716,6 @@ class StornoInvoicing extends Module
                 $status = 'issued';
             }
 
-            // Save mapping
             Db::getInstance()->insert('storno_invoices', [
                 'id_order' => (int) $order->id,
                 'storno_invoice_id' => pSQL($invoiceId),
@@ -477,13 +728,9 @@ class StornoInvoicing extends Module
 
             PrestaShopLogger::addLog(
                 'Storno: Invoice ' . $invoiceNumber . ' created for order #' . $order->reference,
-                1,
-                null,
-                'Order',
-                $order->id
+                1, null, 'Order', $order->id
             );
         } catch (\Exception $e) {
-            // Save error for admin visibility
             Db::getInstance()->insert('storno_invoices', [
                 'id_order' => (int) $order->id,
                 'storno_invoice_id' => '',
@@ -495,11 +742,8 @@ class StornoInvoicing extends Module
             ]);
 
             PrestaShopLogger::addLog(
-                'Storno: Failed to create invoice for order #' . $order->reference . ': ' . $e->getMessage(),
-                3,
-                null,
-                'Order',
-                $order->id
+                'Storno: Failed for order #' . $order->reference . ': ' . $e->getMessage(),
+                3, null, 'Order', $order->id
             );
         }
     }
@@ -526,7 +770,6 @@ class StornoInvoicing extends Module
             $clientData['phone'] = $address->phone_mobile;
         }
 
-        // Company-specific fields
         if ($address->company) {
             if ($address->vat_number) {
                 $clientData['vatCode'] = $address->vat_number;
@@ -537,7 +780,6 @@ class StornoInvoicing extends Module
             }
         }
 
-        // State/county
         if ($address->id_state) {
             $state = new State($address->id_state);
             if (Validate::isLoadedObject($state)) {
@@ -554,6 +796,7 @@ class StornoInvoicing extends Module
     {
         $lines = [];
         $defaultVat = (float) (Configuration::get('STORNO_DEFAULT_VAT_RATE') ?: 21);
+        $unit = Configuration::get('STORNO_DEFAULT_UNIT') ?: 'buc';
 
         foreach ($order->getProductsDetail() as $product) {
             $vatRate = (float) $product['tax_rate'];
@@ -566,7 +809,7 @@ class StornoInvoicing extends Module
                 'quantity' => (float) $product['product_quantity'],
                 'unitPrice' => round((float) $product['unit_price_tax_excl'], 4),
                 'vatRate' => $vatRate,
-                'unitOfMeasure' => 'buc',
+                'unitOfMeasure' => $unit,
             ];
 
             if (!empty($product['product_reference'])) {
@@ -576,40 +819,40 @@ class StornoInvoicing extends Module
             $lines[] = $line;
         }
 
-        // Shipping as a separate line
+        // Shipping
         $shippingCost = (float) $order->total_shipping_tax_excl;
         if ($shippingCost > 0) {
             $shippingVat = (float) (Configuration::get('STORNO_SHIPPING_VAT_RATE') ?: 21);
             $lines[] = [
-                'description' => 'Transport',
+                'description' => Configuration::get('STORNO_SHIPPING_LABEL') ?: 'Transport',
                 'quantity' => 1,
                 'unitPrice' => round($shippingCost, 4),
                 'vatRate' => $shippingVat,
-                'unitOfMeasure' => 'buc',
+                'unitOfMeasure' => $unit,
             ];
         }
 
-        // Discounts (cart rules) as negative lines
+        // Discounts
         $totalDiscounts = (float) $order->total_discounts_tax_excl;
         if ($totalDiscounts > 0) {
             $lines[] = [
-                'description' => 'Discount',
+                'description' => Configuration::get('STORNO_DISCOUNT_LABEL') ?: 'Discount',
                 'quantity' => 1,
                 'unitPrice' => -round($totalDiscounts, 4),
                 'vatRate' => $defaultVat,
-                'unitOfMeasure' => 'buc',
+                'unitOfMeasure' => $unit,
             ];
         }
 
-        // Wrapping costs
+        // Gift wrapping
         $wrappingCost = (float) $order->total_wrapping_tax_excl;
         if ($wrappingCost > 0) {
             $lines[] = [
-                'description' => 'Ambalare cadou',
+                'description' => Configuration::get('STORNO_WRAPPING_LABEL') ?: 'Ambalare cadou',
                 'quantity' => 1,
                 'unitPrice' => round($wrappingCost, 4),
                 'vatRate' => $defaultVat,
-                'unitOfMeasure' => 'buc',
+                'unitOfMeasure' => $unit,
             ];
         }
 
@@ -619,15 +862,25 @@ class StornoInvoicing extends Module
     private function mapPaymentMethod(string $module): string
     {
         $map = [
-            'ps_wirepayment' => 'bank_transfer',
-            'ps_checkpayment' => 'cheque',
-            'ps_cashondelivery' => 'cash',
-            'stripe' => 'card',
-            'paypal' => 'card',
-            'ps_eventspayment' => 'card',
+            'ps_wirepayment' => Configuration::get('STORNO_PM_WIREPAYMENT') ?: 'bank_transfer',
+            'ps_checkpayment' => Configuration::get('STORNO_PM_CHECKPAYMENT') ?: 'cheque',
+            'ps_cashondelivery' => Configuration::get('STORNO_PM_CASHONDELIVERY') ?: 'cash',
+            'stripe' => Configuration::get('STORNO_PM_STRIPE') ?: 'card',
+            'paypal' => Configuration::get('STORNO_PM_PAYPAL') ?: 'card',
         ];
 
-        return $map[$module] ?? 'other';
+        return $map[$module] ?? (Configuration::get('STORNO_PM_DEFAULT') ?: 'other');
+    }
+
+    private function formatInternalNote(Order $order): string
+    {
+        $format = Configuration::get('STORNO_INTERNAL_NOTE_FORMAT') ?: 'PrestaShop #{reference}';
+
+        return str_replace(
+            ['{reference}', '{id}'],
+            [$order->reference, $order->id],
+            $format
+        );
     }
 
     // ─── Helpers ─────────────────────────────────────────────────

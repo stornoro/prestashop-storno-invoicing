@@ -131,6 +131,13 @@ class StornoApi
         return $this->request('GET', '/api/v1/companies');
     }
 
+    // ─── Document Series ────────────────────────────────────────
+
+    public function listDocumentSeries()
+    {
+        return $this->request('GET', '/api/v1/document-series');
+    }
+
     // ─── Clients ─────────────────────────────────────────────────
 
     public function createClient($data)
