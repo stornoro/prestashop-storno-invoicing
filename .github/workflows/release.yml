@@ -1,0 +1,31 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Build release ZIP
+        run: |
+          mkdir -p build/stornoinvoicing
+          rsync -a --exclude='.git' --exclude='.github' --exclude='.gitignore' --exclude='build' . build/stornoinvoicing/
+          cd build && zip -r ../stornoinvoicing-${{ steps.version.outputs.VERSION }}.zip stornoinvoicing/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: stornoinvoicing-${{ steps.version.outputs.VERSION }}.zip
+          generate_release_notes: true
