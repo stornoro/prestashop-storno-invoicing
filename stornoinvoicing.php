@@ -60,7 +60,6 @@ class StornoInvoicing extends Module
         Configuration::deleteByName('STORNO_WEBHOOK_SECRET');
         Configuration::deleteByName('STORNO_WEBHOOK_ID');
         Configuration::deleteByName('STORNO_AUTO_ISSUE');
-        Configuration::deleteByName('STORNO_AUTO_SUBMIT');
         Configuration::deleteByName('STORNO_DEFAULT_VAT_RATE');
         Configuration::deleteByName('STORNO_SHIPPING_VAT_RATE');
         Configuration::deleteByName('STORNO_TRIGGER_STATUS');
@@ -108,7 +107,6 @@ class StornoInvoicing extends Module
         Configuration::updateValue('STORNO_API_KEY', Tools::getValue('STORNO_API_KEY'));
         Configuration::updateValue('STORNO_COMPANY_ID', Tools::getValue('STORNO_COMPANY_ID'));
         Configuration::updateValue('STORNO_AUTO_ISSUE', (int) Tools::getValue('STORNO_AUTO_ISSUE'));
-        Configuration::updateValue('STORNO_AUTO_SUBMIT', (int) Tools::getValue('STORNO_AUTO_SUBMIT'));
         Configuration::updateValue('STORNO_DEFAULT_VAT_RATE', (float) Tools::getValue('STORNO_DEFAULT_VAT_RATE'));
         Configuration::updateValue('STORNO_SHIPPING_VAT_RATE', (float) Tools::getValue('STORNO_SHIPPING_VAT_RATE'));
         Configuration::updateValue('STORNO_TRIGGER_STATUS', (int) Tools::getValue('STORNO_TRIGGER_STATUS'));
@@ -233,18 +231,7 @@ class StornoInvoicing extends Module
                             'type' => 'switch',
                             'label' => $this->l('Auto-issue invoices'),
                             'name' => 'STORNO_AUTO_ISSUE',
-                            'desc' => $this->l('Automatically issue the invoice (assign number, generate PDF/XML) after creation.'),
-                            'is_bool' => true,
-                            'values' => [
-                                ['id' => 'active_on', 'value' => 1, 'label' => $this->l('Yes')],
-                                ['id' => 'active_off', 'value' => 0, 'label' => $this->l('No')],
-                            ],
-                        ],
-                        [
-                            'type' => 'switch',
-                            'label' => $this->l('Auto-submit to e-Factura'),
-                            'name' => 'STORNO_AUTO_SUBMIT',
-                            'desc' => $this->l('Automatically submit issued invoices to ANAF e-Factura.'),
+                            'desc' => $this->l('Automatically issue the invoice (assign number, generate PDF/XML) after creation. e-Factura submission is handled by Storno based on the company settings (Settings → e-Factura delay).'),
                             'is_bool' => true,
                             'values' => [
                                 ['id' => 'active_on', 'value' => 1, 'label' => $this->l('Yes')],
@@ -288,9 +275,8 @@ class StornoInvoicing extends Module
             'STORNO_API_KEY' => Configuration::get('STORNO_API_KEY'),
             'STORNO_COMPANY_ID' => Configuration::get('STORNO_COMPANY_ID'),
             'STORNO_AUTO_ISSUE' => Configuration::get('STORNO_AUTO_ISSUE'),
-            'STORNO_AUTO_SUBMIT' => Configuration::get('STORNO_AUTO_SUBMIT'),
-            'STORNO_DEFAULT_VAT_RATE' => Configuration::get('STORNO_DEFAULT_VAT_RATE') ?: '19',
-            'STORNO_SHIPPING_VAT_RATE' => Configuration::get('STORNO_SHIPPING_VAT_RATE') ?: '19',
+            'STORNO_DEFAULT_VAT_RATE' => Configuration::get('STORNO_DEFAULT_VAT_RATE') ?: '21',
+            'STORNO_SHIPPING_VAT_RATE' => Configuration::get('STORNO_SHIPPING_VAT_RATE') ?: '21',
             'STORNO_TRIGGER_STATUS' => Configuration::get('STORNO_TRIGGER_STATUS') ?: 2,
         ];
 
@@ -469,16 +455,12 @@ class StornoInvoicing extends Module
             $status = 'draft';
 
             // 4. Auto-issue if enabled
+            // e-Factura submission is handled automatically by the Storno backend
+            // based on the company's efacturaDelayHours setting.
             if (Configuration::get('STORNO_AUTO_ISSUE')) {
                 $issueResult = $api->issueInvoice($invoiceId);
                 $invoiceNumber = $issueResult['number'] ?? $invoiceNumber;
                 $status = 'issued';
-
-                // 5. Auto-submit to e-Factura if enabled
-                if (Configuration::get('STORNO_AUTO_SUBMIT')) {
-                    $api->submitInvoice($invoiceId);
-                    $status = 'sent_to_provider';
-                }
             }
 
             // Save mapping
@@ -570,7 +552,7 @@ class StornoInvoicing extends Module
     private function buildInvoiceLines(Order $order): array
     {
         $lines = [];
-        $defaultVat = (float) (Configuration::get('STORNO_DEFAULT_VAT_RATE') ?: 19);
+        $defaultVat = (float) (Configuration::get('STORNO_DEFAULT_VAT_RATE') ?: 21);
 
         foreach ($order->getProductsDetail() as $product) {
             $vatRate = (float) $product['tax_rate'];
@@ -596,7 +578,7 @@ class StornoInvoicing extends Module
         // Shipping as a separate line
         $shippingCost = (float) $order->total_shipping_tax_excl;
         if ($shippingCost > 0) {
-            $shippingVat = (float) (Configuration::get('STORNO_SHIPPING_VAT_RATE') ?: 19);
+            $shippingVat = (float) (Configuration::get('STORNO_SHIPPING_VAT_RATE') ?: 21);
             $lines[] = [
                 'description' => 'Transport',
                 'quantity' => 1,

@@ -76,9 +76,10 @@ Apoi în **Back Office → Module Manager**:
 | **Company UUID** | `550e8400-...` | UUID-ul companiei |
 | **Trigger on Order Status** | `Shipped` / `Expediată` | Factura se creează la expediere |
 | **Auto-issue invoices** | Da | Generează automat număr + PDF + XML |
-| **Auto-submit to e-Factura** | Da | Trimite automat la ANAF |
-| **Default VAT Rate** | 19 | Rata TVA implicită |
-| **Shipping VAT Rate** | 19 | TVA pe transport |
+| **Default VAT Rate** | 21 | Rata TVA implicită (fallback) |
+| **Shipping VAT Rate** | 21 | TVA pe transport |
+
+> **e-Factura:** Trimiterea la ANAF este gestionată automat de Storno conform setării `efacturaDelayHours` din companie (Setări → e-Factura). Modulul PrestaShop nu trebuie să configureze nimic suplimentar.
 
 ### 5. Înregistrare Webhook (opțional)
 
@@ -96,7 +97,7 @@ Click **Register Webhook** din pagina de configurare. Acesta permite Storno să 
    a. Creează clientul în Storno (sau îl găsește dacă există)
    b. Creează factura cu toate produsele din comandă
    c. Emite factura (generează număr, PDF, XML)
-   d. Trimite la e-Factura ANAF (dacă auto-submit este activ)
+   d. Storno trimite automat la e-Factura ANAF (conform efacturaDelayHours)
 4. Pe pagina comenzii apare panoul "Storno Invoice" cu:
    - Numărul facturii (link spre Storno)
    - Statusul (draft → issued → validated)
