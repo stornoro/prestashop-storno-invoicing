@@ -1,17 +1,17 @@
-# Storno Invoicing — Modul PrestaShop
+# Storno Invoicing — PrestaShop Module
 
-Modul de facturare automată pentru PrestaShop 1.7+ / 8.x / 9.x care creează și emite facturi prin API-ul Storno, găzduit pe serverul propriu (self-hosted). Datele nu părăsesc infrastructura dvs.
+Automatic invoice generation for PrestaShop 1.7+ / 8.x / 9.x via the Storno API, designed for self-hosted instances. Your data stays on your own infrastructure.
 
-## Cerințe
+## Requirements
 
-- PrestaShop 1.7.0+ (compatibil cu 8.x și 9.x)
-- PHP 7.4+ cu extensia cURL activată
-- Instanță Storno self-hosted (Docker) pe același server sau în rețeaua locală
-- Licență Storno **Professional** (39 RON/lună) — necesară pentru webhooks
+- PrestaShop 1.7.0+ (compatible with 8.x and 9.x)
+- PHP 7.4+ with cURL extension enabled
+- Self-hosted Storno instance (Docker) on the same server or local network
+- Storno **Professional** license (39 RON/month) — required for webhooks
 
-## Instalare
+## Installation
 
-### 1. Instalare Storno Self-Hosted
+### 1. Deploy Storno (Self-Hosted)
 
 ```bash
 mkdir /opt/storno && cd /opt/storno
@@ -20,15 +20,15 @@ curl -O https://raw.githubusercontent.com/stornoro/storno/main/deploy/.env.examp
 cp .env.example .env
 ```
 
-Editează `.env`:
+Edit `.env`:
 ```bash
 APP_SECRET=$(openssl rand -hex 32)
 JWT_PASSPHRASE=$(openssl rand -hex 32)
-MYSQL_ROOT_PASSWORD=parola-bd
-MYSQL_PASSWORD=parola-bd
-LICENSE_KEY=cheia-de-licenta     # din app.storno.ro → Settings → Licensing
-FRONTEND_URL=https://facturi.domeniu.ro
-PUBLIC_API_BASE=https://facturi.domeniu.ro/api
+MYSQL_ROOT_PASSWORD=strong-password
+MYSQL_PASSWORD=strong-password
+LICENSE_KEY=your-license-key     # from app.storno.ro → Settings → Licensing
+FRONTEND_URL=https://invoices.yourdomain.com
+PUBLIC_API_BASE=https://invoices.yourdomain.com/api
 ```
 
 ```bash
@@ -37,133 +37,193 @@ docker compose exec backend php bin/console doctrine:schema:create
 docker compose exec backend php bin/console doctrine:migrations:sync-metadata-storage
 docker compose exec backend php bin/console doctrine:migrations:version --add --all --no-interaction
 docker compose exec backend php bin/console app:user:create \
-  --email=admin@domeniu.ro --password=parola --admin
+  --email=admin@yourdomain.com --password=your-password --admin
 ```
 
-> Storno va rula pe portul 8901 (frontend) și 8900 (API). Configurați un reverse proxy (nginx/caddy) pentru HTTPS.
+> Storno runs on port 8901 (frontend) and 8900 (API). Configure a reverse proxy (nginx/caddy) for HTTPS.
 
-### 2. Crearea API Key
+See the [self-hosting guide](https://docs.storno.ro/getting-started/self-hosting) for full details.
 
-1. Deschide `https://facturi.domeniu.ro` și autentifică-te
-2. Du-te la **Setări → Chei API**
-3. Creează o cheie nouă cu scopurile:
+### 2. Create an API Key
+
+1. Open your Storno instance and log in
+2. Go to **Settings → API Keys** ([docs](https://docs.storno.ro/api-reference/api-keys/create))
+3. Create a new key with these [scopes](https://docs.storno.ro/api-reference/api-keys/scopes):
    - `client.view`, `client.create`
    - `invoice.create`, `invoice.issue`, `invoice.send`, `invoice.view`
-4. Copiază token-ul (se afișează o singură dată!)
-5. Notează UUID-ul companiei din **Setări → Companie**
+4. Copy the token (shown only once!)
+5. Note the Company UUID from **Settings → Company**
 
-### 3. Instalare modul PrestaShop
+### 3. Install the PrestaShop Module
 
 ```bash
-# Copiază modulul în PrestaShop
+# Copy the module into PrestaShop
 cp -r stornoinvoicing/ /var/www/prestashop/modules/
 
-# Setează permisiuni
+# Set permissions
 chown -R www-data:www-data /var/www/prestashop/modules/stornoinvoicing/
 ```
 
-Apoi în **Back Office → Module Manager**:
-1. Caută "Storno Invoicing"
+Then in **Back Office → Module Manager**:
+1. Search for "Storno Invoicing"
 2. Click **Install**
 3. Click **Configure**
 
-### 4. Configurare
+### 4. Configuration
 
-| Setare | Valoare | Notă |
-|--------|---------|------|
-| **API URL** | `https://facturi.domeniu.ro` | URL-ul instanței Storno |
-| **API Key** | `af_...` | Token-ul creat la pasul 2 |
-| **Company UUID** | `550e8400-...` | UUID-ul companiei |
-| **Trigger on Order Status** | `Shipped` / `Expediată` | Factura se creează la expediere |
-| **Auto-issue invoices** | Da | Generează automat număr + PDF + XML |
-| **Default VAT Rate** | 21 | Rata TVA implicită (fallback) |
-| **Shipping VAT Rate** | 21 | TVA pe transport |
+The module configuration is split into 4 sections, each linking to the relevant [docs.storno.ro](https://docs.storno.ro) page:
 
-> **e-Factura:** Trimiterea la ANAF este gestionată automat de Storno conform setării `efacturaDelayHours` din companie (Setări → e-Factura). Modulul PrestaShop nu trebuie să configureze nimic suplimentar.
+#### API Connection
 
-### 5. Înregistrare Webhook (opțional)
+| Setting | Example | Docs |
+|---------|---------|------|
+| **API URL** | `https://invoices.yourdomain.com` | [Self-hosting](https://docs.storno.ro/getting-started/self-hosting) |
+| **API Key** | `af_...` | [Create API key](https://docs.storno.ro/api-reference/api-keys/create) |
+| **Company UUID** | `550e8400-...` | [Companies](https://docs.storno.ro/api-reference/companies/list) |
 
-Click **Register Webhook** din pagina de configurare. Acesta permite Storno să notifice PrestaShop când:
-- Factura este validată de ANAF
-- Factura este respinsă de ANAF
-- Se înregistrează o plată
+#### Invoice Settings
 
-## Flux de funcționare
+| Setting | Default | Description | Docs |
+|---------|---------|-------------|------|
+| **Trigger on Order Status** | Payment accepted | Invoice is created when the order reaches this status (e.g. Shipped) | — |
+| **Auto-issue invoices** | Yes | Assigns number, generates PDF + XML immediately after creation | [Invoice lifecycle](https://docs.storno.ro/concepts/document-lifecycle) |
+| **Auto-apply VAT rules** | Yes | Reverse charge (0% for EU VIES clients), OSS rates, non-EU export exemption | [e-Factura integration](https://docs.storno.ro/concepts/einvoice-integration) |
+| **Document Series** | Default (auto) | Invoice numbering series from Storno | [Series numbering](https://docs.storno.ro/concepts/series-numbering) |
+| **Invoice Language** | From Storno | PDF language (ro/en/de/fr) | [Create invoice](https://docs.storno.ro/api-reference/invoices/create) |
+| **Payment Term** | 30 days | Days from issue date to due date | — |
+| **Default VAT Rate** | 21% | Fallback when PrestaShop product has no tax | [VAT rates](https://docs.storno.ro/api-reference/vat-rates/list) |
+| **Shipping VAT Rate** | 21% | VAT on the shipping cost line | — |
+| **Unit of Measure** | buc | Unit shown on invoice lines | — |
+| **Invoice Notes** | (empty) | Public notes on every invoice | — |
+| **Internal Note Format** | `PrestaShop #{reference}` | Internal-only note with `{reference}` and `{id}` placeholders | — |
+
+> **e-Factura:** ANAF submission is handled automatically by Storno based on the company's `efacturaDelayHours` setting (Settings → e-Factura). The PrestaShop module does not need to configure anything for this.
+
+#### Invoice Line Labels
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| **Shipping Line** | Transport | Description for the shipping cost line |
+| **Discount Line** | Discount | Description for discount lines (negative amount) |
+| **Gift Wrapping Line** | Ambalare cadou | Description for gift wrapping costs |
+
+#### Payment Method Mapping
+
+Each PrestaShop payment module is mapped to a Storno payment method shown on the invoice.
+
+| PrestaShop Module | Default | Options |
+|-------------------|---------|---------|
+| ps_wirepayment | Bank Transfer | Bank Transfer, Cash, Card, Cheque, Other |
+| ps_checkpayment | Cheque | " |
+| ps_cashondelivery | Cash | " |
+| stripe | Card | " |
+| paypal | Card | " |
+| Default (other) | Other | " |
+
+### 5. Register Webhook (optional)
+
+Click **Register Webhook** from the configuration page. This lets Storno notify PrestaShop when:
+- An invoice is validated by ANAF
+- An invoice is rejected by ANAF
+- A payment is recorded
+
+See [webhooks documentation](https://docs.storno.ro/concepts/webhooks-events) for details.
+
+## How It Works
 
 ```
-1. Client plasează comandă în PrestaShop
-2. Operator marchează comanda ca "Expediată"
-3. Modulul se activează automat:
-   a. Creează clientul în Storno (sau îl găsește dacă există)
-   b. Creează factura cu toate produsele din comandă
-   c. Emite factura (generează număr, PDF, XML)
-   d. Storno trimite automat la e-Factura ANAF (conform efacturaDelayHours)
-4. Pe pagina comenzii apare panoul "Storno Invoice" cu:
-   - Numărul facturii (link spre Storno)
-   - Statusul (draft → issued → validated)
-   - Eventuale erori
-5. Webhook-ul actualizează statusul când ANAF validează/respinge factura
+1. Customer places an order in PrestaShop
+2. Operator marks the order as "Shipped" (or configured status)
+3. The module activates automatically:
+   a. Creates the client in Storno (or finds existing by CUI)
+   b. Creates the invoice with all order products
+   c. Issues the invoice (assigns number, generates PDF, XML)
+   d. Storno submits to e-Factura ANAF automatically (per efacturaDelayHours)
+4. On the order page, a "Storno Invoice" panel shows:
+   - Invoice number (links to Storno)
+   - Status (draft → issued → validated)
+   - Any errors
+5. Webhook updates the status when ANAF validates/rejects the invoice
 ```
 
-## Securitatea datelor
+## VAT Handling
 
-- Toate datele rămân pe serverul dvs. (Storno self-hosted)
-- Comunicarea PrestaShop ↔ Storno se face local (sau prin rețeaua internă)
-- Singura comunicare externă este cu ANAF (obligatorie legal pentru e-Factura)
-- API Key-ul este stocat securizat în configurația PrestaShop
-- Webhook-urile sunt protejate cu semnătură HMAC-SHA256
+When **Auto-apply VAT rules** is enabled, Storno determines the correct VAT automatically:
 
-## Mapare date
+| Scenario | Client | VAT | Category |
+|----------|--------|-----|----------|
+| Domestic sale | Romanian company | 21% | S (Standard) |
+| Reverse charge | EU with valid VIES | **0%** | **AE** (Reverse charge) |
+| OSS | EU without VIES, company has OSS | Destination country rate | S |
+| Non-EU export | Client in US/UK etc. | 0% | Z (Zero-rated) |
+
+## Data Security
+
+- All data stays on your server (self-hosted Storno)
+- PrestaShop ↔ Storno communication is local (or via internal network)
+- The only external communication is with ANAF (legally required for e-Factura)
+- API Key is stored securely in PrestaShop configuration
+- Webhooks are protected with HMAC-SHA256 signatures
+
+## Data Mapping
 
 | PrestaShop | Storno |
 |------------|--------|
-| Referința comenzii | `orderNumber` + `internalNote` |
-| Client (companie) | `client.type = company` |
-| Client (persoană) | `client.type = individual` |
+| Order reference | `orderNumber` + `internalNote` |
+| Client (company) | `client.type = company` |
+| Client (individual) | `client.type = individual` |
 | CUI / DNI | `client.cui` |
-| Cod TVA | `client.vatCode` |
-| Produse | `invoice.lines[]` |
-| Transport | Linie separată "Transport" |
-| Discounturi | Linie negativă "Discount" |
-| Ambalare cadou | Linie separată "Ambalare cadou" |
-| Metodă plată | Mapare automată (transfer/card/cash) |
+| VAT code | `client.vatCode` |
+| Products | `invoice.lines[]` |
+| Shipping | Separate line (configurable label) |
+| Discounts | Negative line (configurable label) |
+| Gift wrapping | Separate line (configurable label) |
+| Payment method | Configurable mapping per module |
 
-## Depanare
+## Translations
 
-**Verificare conexiune:** Click "Test Connection" din pagina de configurare.
+The module uses **English as the base language**. Romanian translations are included in `translations/ro.php`.
 
-**Loguri:** Modulul logează toate acțiunile în **Back Office → Advanced Parameters → Logs** (caută "Storno").
+To add more languages, create `translations/{iso}.php` following the same format. PrestaShop will also let you translate strings via **Back Office → International → Translations → Installed module translations**.
 
-**Webhook log:** Tabelul `ps_storno_webhook_log` conține toate evenimentele primite.
+## Troubleshooting
 
-**Erori comune:**
-- `HTTP 401` — API Key invalid sau expirat
-- `HTTP 403` — Scopuri insuficiente pe API Key
-- `HTTP 422` — Date invalide (verifică liniile facturii)
-- `cURL error` — Storno nu este accesibil (verifică URL-ul și rețeaua)
+**Test connection:** Click "Test Connection" from the configuration page.
 
-## Compatibilitate PrestaShop 9
+**Logs:** The module logs all actions to **Back Office → Advanced Parameters → Logs** (search for "Storno").
 
-Modulul folosește hook-uri standard (`actionValidateOrder`, `actionOrderStatusPostUpdate`, `displayAdminOrder`) care sunt suportate în PrestaShop 9. La migrare nu sunt necesare modificări.
+**Webhook log:** The `ps_storno_webhook_log` table contains all received events.
 
-## Structura fișierelor
+**Common errors:**
+- `HTTP 401` — Invalid or expired API Key
+- `HTTP 403` — Insufficient API Key scopes
+- `HTTP 422` — Invalid data (check invoice lines)
+- `cURL error` — Storno is not reachable (check URL and network)
+
+## PrestaShop 9 Compatibility
+
+The module uses standard hooks (`actionValidateOrder`, `actionOrderStatusPostUpdate`, `displayAdminOrder`) which are supported in PrestaShop 9. No changes are needed during migration.
+
+## File Structure
 
 ```
 stornoinvoicing/
-├── stornoinvoicing.php          # Clasa principală
+├── stornoinvoicing.php          # Main module class
 ├── classes/
-│   └── StornoApi.php            # Client API Storno
+│   └── StornoApi.php            # Storno API client
 ├── controllers/
 │   └── front/
-│       └── webhook.php          # Endpoint webhook
+│       └── webhook.php          # Webhook endpoint
 ├── sql/
-│   ├── install.php              # Creare tabele
-│   └── uninstall.php            # Ștergere tabele
+│   ├── install.php              # Table creation
+│   └── uninstall.php            # Table removal
+├── translations/
+│   └── ro.php                   # Romanian translations
 ├── views/
 │   ├── css/
-│   │   └── admin.css            # Stiluri admin
+│   │   └── admin.css            # Admin styles
 │   └── templates/
 │       └── hook/
-│           └── admin_order.tpl  # Panou pe pagina comenzii
+│           └── admin_order.tpl  # Order page panel
 └── README.md
 ```

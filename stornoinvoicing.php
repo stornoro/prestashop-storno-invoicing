@@ -147,9 +147,14 @@ class StornoInvoicing extends Module
 
     private function saveConnectionSettings()
     {
-        foreach (['STORNO_API_URL' => 'API URL', 'STORNO_API_KEY' => 'API Key', 'STORNO_COMPANY_ID' => 'Company UUID'] as $key => $label) {
+        $requiredFields = [
+            'STORNO_API_URL' => $this->l('API URL is required.'),
+            'STORNO_API_KEY' => $this->l('API Key is required.'),
+            'STORNO_COMPANY_ID' => $this->l('Company UUID is required.'),
+        ];
+        foreach ($requiredFields as $key => $errorMsg) {
             if (empty(Tools::getValue($key))) {
-                return $this->displayError($this->l($label . ' is required.'));
+                return $this->displayError($errorMsg);
             }
         }
 
@@ -254,7 +259,7 @@ class StornoInvoicing extends Module
                         'type' => 'text',
                         'label' => $this->l('API URL'),
                         'name' => 'STORNO_API_URL',
-                        'desc' => $this->l('URL-ul instantei Storno self-hosted (ex: https://factura.domeniu.ro).') . ' <a href="https://docs.storno.ro/getting-started/self-hosting" target="_blank">Ghid instalare</a>',
+                        'desc' => $this->l('Your self-hosted Storno instance URL (e.g. https://invoices.yourdomain.com).') . ' <a href="https://docs.storno.ro/getting-started/self-hosting" target="_blank">' . $this->l('Setup guide') . '</a>',
                         'required' => true,
                         'class' => 'fixed-width-xxl',
                     ],
@@ -262,7 +267,7 @@ class StornoInvoicing extends Module
                         'type' => 'text',
                         'label' => $this->l('API Key'),
                         'name' => 'STORNO_API_KEY',
-                        'desc' => $this->l('Token-ul API care incepe cu af_... Creati-l din Storno → Setari → Chei API.') . ' <a href="https://docs.storno.ro/api-reference/api-keys/create" target="_blank">Cum creez o cheie API</a> | <a href="https://docs.storno.ro/api-reference/api-keys/scopes" target="_blank">Scopuri necesare</a>',
+                        'desc' => $this->l('API token starting with af_... Create it in Storno → Settings → API Keys.') . ' <a href="https://docs.storno.ro/api-reference/api-keys/create" target="_blank">' . $this->l('How to create an API key') . '</a> | <a href="https://docs.storno.ro/api-reference/api-keys/scopes" target="_blank">' . $this->l('Required scopes') . '</a>',
                         'required' => true,
                         'class' => 'fixed-width-xxl',
                     ],
@@ -270,7 +275,7 @@ class StornoInvoicing extends Module
                         'type' => 'text',
                         'label' => $this->l('Company UUID'),
                         'name' => 'STORNO_COMPANY_ID',
-                        'desc' => $this->l('UUID-ul companiei pentru care se emit facturi. Il gasiti in Storno → Setari → Companie.') . ' <a href="https://docs.storno.ro/api-reference/companies/list" target="_blank">Documentatie companii</a>',
+                        'desc' => $this->l('UUID of the company to issue invoices for. Find it in Storno → Settings → Company.') . ' <a href="https://docs.storno.ro/api-reference/companies/list" target="_blank">' . $this->l('Companies documentation') . '</a>',
                         'required' => true,
                         'class' => 'fixed-width-xxl',
                     ],
@@ -325,14 +330,14 @@ class StornoInvoicing extends Module
                         'type' => 'select',
                         'label' => $this->l('Trigger on Order Status'),
                         'name' => 'STORNO_TRIGGER_STATUS',
-                        'desc' => $this->l('Factura se creeaza cand comanda ajunge la acest status (ex: Expediata). Pana atunci, nu se trimite nimic catre Storno.'),
+                        'desc' => $this->l('The invoice is created when the order reaches this status (e.g. Shipped). Nothing is sent to Storno until then.'),
                         'options' => ['query' => $statusOptions, 'id' => 'id', 'name' => 'name'],
                     ],
                     [
                         'type' => 'switch',
                         'label' => $this->l('Auto-issue invoices'),
                         'name' => 'STORNO_AUTO_ISSUE',
-                        'desc' => $this->l('Emite factura automat dupa creare: ii atribuie numar din serie, genereaza PDF si XML. Trimiterea la e-Factura ANAF este controlata din setarile companiei in Storno.') . ' <a href="https://docs.storno.ro/concepts/document-lifecycle" target="_blank">Ciclul de viata al facturii</a>',
+                        'desc' => $this->l('Automatically issue the invoice after creation: assigns a number from the series, generates PDF and XML. e-Factura submission to ANAF is controlled from the company settings in Storno.') . ' <a href="https://docs.storno.ro/concepts/document-lifecycle" target="_blank">' . $this->l('Invoice lifecycle') . '</a>',
                         'is_bool' => true,
                         'values' => [
                             ['id' => 'active_on', 'value' => 1, 'label' => $this->l('Yes')],
@@ -343,7 +348,7 @@ class StornoInvoicing extends Module
                         'type' => 'switch',
                         'label' => $this->l('Auto-apply VAT rules'),
                         'name' => 'STORNO_AUTO_APPLY_VAT_RULES',
-                        'desc' => $this->l('Storno aplica automat regulile de TVA: taxare inversa (0% pentru clienti EU cu VIES valid), rate OSS pentru vanzari intracomunitare, si scutire la export non-EU.') . ' <a href="https://docs.storno.ro/concepts/einvoice-integration" target="_blank">Integrare e-Factura</a>',
+                        'desc' => $this->l('Storno automatically applies VAT rules: reverse charge (0% for EU clients with valid VIES), OSS rates for intra-community sales, and exemption for non-EU exports.') . ' <a href="https://docs.storno.ro/concepts/einvoice-integration" target="_blank">' . $this->l('e-Factura integration') . '</a>',
                         'is_bool' => true,
                         'values' => [
                             ['id' => 'active_on', 'value' => 1, 'label' => $this->l('Yes')],
@@ -354,21 +359,21 @@ class StornoInvoicing extends Module
                         'type' => 'select',
                         'label' => $this->l('Document Series'),
                         'name' => 'STORNO_DOCUMENT_SERIES_ID',
-                        'desc' => $this->l('Seria de numerotare a facturilor. Lasati implicit pentru a folosi seria implicita a companiei din Storno.') . ' <a href="https://docs.storno.ro/concepts/series-numbering" target="_blank">Cum functioneaza seriile</a>',
+                        'desc' => $this->l('Invoice numbering series. Leave default to use the company default series from Storno.') . ' <a href="https://docs.storno.ro/concepts/series-numbering" target="_blank">' . $this->l('How series work') . '</a>',
                         'options' => ['query' => $seriesOptions, 'id' => 'id', 'name' => 'name'],
                     ],
                     [
                         'type' => 'select',
                         'label' => $this->l('Invoice Language'),
                         'name' => 'STORNO_INVOICE_LANGUAGE',
-                        'desc' => $this->l('Limba in care se genereaza PDF-ul facturii. Lasati implicit pentru a folosi limba din Storno.') . ' <a href="https://docs.storno.ro/api-reference/invoices/create" target="_blank">Documentatie creare factura</a>',
+                        'desc' => $this->l('Language for the generated invoice PDF. Leave default to use the language from Storno.') . ' <a href="https://docs.storno.ro/api-reference/invoices/create" target="_blank">' . $this->l('Invoice creation docs') . '</a>',
                         'options' => ['query' => $languageOptions, 'id' => 'id', 'name' => 'name'],
                     ],
                     [
                         'type' => 'text',
                         'label' => $this->l('Payment Term (days)'),
                         'name' => 'STORNO_PAYMENT_TERM_DAYS',
-                        'desc' => $this->l('Numarul de zile de la data emiterii pana la scadenta. Exemplu: 30 = scadenta la 30 de zile de la emitere.'),
+                        'desc' => $this->l('Number of days from issue date to due date. Example: 30 = due 30 days after issuing.'),
                         'class' => 'fixed-width-sm',
                         'suffix' => $this->l('days'),
                     ],
@@ -376,7 +381,7 @@ class StornoInvoicing extends Module
                         'type' => 'text',
                         'label' => $this->l('Default VAT Rate (%)'),
                         'name' => 'STORNO_DEFAULT_VAT_RATE',
-                        'desc' => $this->l('Rata TVA implicita cand un produs din PrestaShop nu are taxa configurata. Se foloseste ca fallback. TVA-ul final poate fi suprascris de regulile automate (taxare inversa, OSS).') . ' <a href="https://docs.storno.ro/api-reference/vat-rates/list" target="_blank">Rate TVA in Storno</a>',
+                        'desc' => $this->l('Default VAT rate when a PrestaShop product has no tax configured. Used as fallback. The final VAT may be overridden by automatic rules (reverse charge, OSS).') . ' <a href="https://docs.storno.ro/api-reference/vat-rates/list" target="_blank">' . $this->l('VAT rates in Storno') . '</a>',
                         'class' => 'fixed-width-sm',
                         'suffix' => '%',
                     ],
@@ -384,7 +389,7 @@ class StornoInvoicing extends Module
                         'type' => 'text',
                         'label' => $this->l('Shipping VAT Rate (%)'),
                         'name' => 'STORNO_SHIPPING_VAT_RATE',
-                        'desc' => $this->l('Rata TVA aplicata liniei de transport. Se aplica numai cand transportul are cost > 0.'),
+                        'desc' => $this->l('VAT rate applied to the shipping line. Only applies when shipping cost is greater than 0.'),
                         'class' => 'fixed-width-sm',
                         'suffix' => '%',
                     ],
@@ -392,14 +397,14 @@ class StornoInvoicing extends Module
                         'type' => 'text',
                         'label' => $this->l('Default Unit of Measure'),
                         'name' => 'STORNO_DEFAULT_UNIT',
-                        'desc' => $this->l('Unitatea de masura afisata pe liniile facturii. Exemple: buc (bucati), kg, ora, m, l, set.'),
+                        'desc' => $this->l('Unit of measure shown on invoice lines. Examples: buc (pieces), kg, ora (hours), m, l, set.'),
                         'class' => 'fixed-width-md',
                     ],
                     [
                         'type' => 'textarea',
                         'label' => $this->l('Invoice Notes'),
                         'name' => 'STORNO_INVOICE_NOTES',
-                        'desc' => $this->l('Note publice afisate pe fiecare factura (ex: detalii bancare, mesaj de multumire). Lasati gol pentru a folosi notele implicite din Storno.'),
+                        'desc' => $this->l('Public notes shown on every invoice (e.g. bank details, thank you message). Leave empty to use default notes from Storno.'),
                         'rows' => 3,
                         'cols' => 60,
                     ],
@@ -407,7 +412,7 @@ class StornoInvoicing extends Module
                         'type' => 'text',
                         'label' => $this->l('Internal Note Format'),
                         'name' => 'STORNO_INTERNAL_NOTE_FORMAT',
-                        'desc' => $this->l('Formatul notei interne (vizibila doar in Storno, nu pe factura). Folositi {reference} pentru referinta comenzii si {id} pentru ID-ul comenzii. Exemplu: PrestaShop #{reference}'),
+                        'desc' => $this->l('Internal note format (visible only in Storno, not on the invoice). Use {reference} for order reference and {id} for order ID. Example: PrestaShop #{reference}'),
                         'class' => 'fixed-width-xxl',
                     ],
                 ],
@@ -442,21 +447,21 @@ class StornoInvoicing extends Module
                         'type' => 'text',
                         'label' => $this->l('Shipping Line'),
                         'name' => 'STORNO_SHIPPING_LABEL',
-                        'desc' => $this->l('Descrierea liniei de transport pe factura. Apare ca linie separata cand comanda are cost de livrare.'),
+                        'desc' => $this->l('Description for the shipping cost line on the invoice. Appears as a separate line when the order has delivery costs.'),
                         'class' => 'fixed-width-xl',
                     ],
                     [
                         'type' => 'text',
                         'label' => $this->l('Discount Line'),
                         'name' => 'STORNO_DISCOUNT_LABEL',
-                        'desc' => $this->l('Descrierea liniei de discount pe factura. Apare ca linie cu valoare negativa cand comanda are reduceri (reguli cos, vouchere).'),
+                        'desc' => $this->l('Description for the discount line on the invoice. Appears as a negative line when the order has discounts (cart rules, vouchers).'),
                         'class' => 'fixed-width-xl',
                     ],
                     [
                         'type' => 'text',
                         'label' => $this->l('Gift Wrapping Line'),
                         'name' => 'STORNO_WRAPPING_LABEL',
-                        'desc' => $this->l('Descrierea liniei de ambalare cadou. Apare doar cand clientul a selectat ambalare cadou in cos.'),
+                        'desc' => $this->l('Description for the gift wrapping line. Only appears when the customer selected gift wrapping.'),
                         'class' => 'fixed-width-xl',
                     ],
                 ],
@@ -496,7 +501,7 @@ class StornoInvoicing extends Module
         $fields = [
             'form' => [
                 'legend' => ['title' => $this->l('Payment Method Mapping'), 'icon' => 'icon-credit-card'],
-                'description' => $this->l('Fiecare modul de plata din PrestaShop este mapat la o metoda de plata din Storno. Aceasta apare pe factura in campul "Metoda de plata".'),
+                'description' => $this->l('Each PrestaShop payment module is mapped to a Storno payment method. This appears on the invoice as the "Payment method" field.'),
                 'input' => [
                     $makeSelect('Wire Payment (ps_wirepayment)', 'STORNO_PM_WIREPAYMENT', 'Bank transfer module'),
                     $makeSelect('Check Payment (ps_checkpayment)', 'STORNO_PM_CHECKPAYMENT', 'Check payment module'),
@@ -532,24 +537,24 @@ class StornoInvoicing extends Module
 
         return '
         <div class="panel">
-            <div class="panel-heading"><i class="icon-link"></i> ' . $this->l('Actiuni') . '</div>
+            <div class="panel-heading"><i class="icon-link"></i> ' . $this->l('Actions') . '</div>
             <div class="form-wrapper">
                 <div class="row">
                     <div class="col-lg-6">
                         <p><strong>' . $this->l('Webhook:') . '</strong> ' . $webhookStatus . '</p>
-                        <p class="help-block">' . $this->l('Webhook-ul permite Storno sa notifice PrestaShop cand o factura este validata/respinsa de ANAF sau cand se inregistreaza o plata.') . ' <a href="https://docs.storno.ro/concepts/webhooks-events" target="_blank">' . $this->l('Documentatie webhooks') . '</a></p>
+                        <p class="help-block">' . $this->l('The webhook allows Storno to notify PrestaShop when an invoice is validated/rejected by ANAF or when a payment is recorded.') . ' <a href="https://docs.storno.ro/concepts/webhooks-events" target="_blank">' . $this->l('Webhooks documentation') . '</a></p>
                         <form method="post" action="' . $currentIndex . '&token=' . $token . '">
                             <button type="submit" name="submitStornoRegisterWebhook" class="btn btn-default">
-                                <i class="icon-refresh"></i> ' . $this->l('Inregistreaza Webhook') . '
+                                <i class="icon-refresh"></i> ' . $this->l('Register Webhook') . '
                             </button>
                         </form>
                     </div>
                     <div class="col-lg-6">
-                        <p><strong>' . $this->l('Test conexiune API:') . '</strong></p>
-                        <p class="help-block">' . $this->l('Verifica daca API URL, API Key si Company UUID sunt corecte si Storno este accesibil.') . '</p>
+                        <p><strong>' . $this->l('Test API connection:') . '</strong></p>
+                        <p class="help-block">' . $this->l('Checks whether API URL, API Key and Company UUID are correct and Storno is reachable.') . '</p>
                         <form method="post" action="' . $currentIndex . '&token=' . $token . '">
                             <button type="submit" name="submitStornoTestConnection" class="btn btn-default">
-                                <i class="icon-check"></i> ' . $this->l('Testeaza Conexiunea') . '
+                                <i class="icon-check"></i> ' . $this->l('Test Connection') . '
                             </button>
                         </form>
                     </div>
