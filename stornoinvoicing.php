@@ -426,10 +426,10 @@ class StornoInvoicing extends Module
             'STORNO_AUTO_APPLY_VAT_RULES' => Configuration::get('STORNO_AUTO_APPLY_VAT_RULES'),
             'STORNO_DOCUMENT_SERIES_ID' => Configuration::get('STORNO_DOCUMENT_SERIES_ID'),
             'STORNO_INVOICE_LANGUAGE' => Configuration::get('STORNO_INVOICE_LANGUAGE'),
-            'STORNO_PAYMENT_TERM_DAYS' => Configuration::get('STORNO_PAYMENT_TERM_DAYS') ?: 30,
-            'STORNO_DEFAULT_VAT_RATE' => Configuration::get('STORNO_DEFAULT_VAT_RATE') ?: '21',
-            'STORNO_SHIPPING_VAT_RATE' => Configuration::get('STORNO_SHIPPING_VAT_RATE') ?: '21',
-            'STORNO_DEFAULT_UNIT' => Configuration::get('STORNO_DEFAULT_UNIT') ?: 'buc',
+            'STORNO_PAYMENT_TERM_DAYS' => Configuration::get('STORNO_PAYMENT_TERM_DAYS') !== false ? Configuration::get('STORNO_PAYMENT_TERM_DAYS') : 30,
+            'STORNO_DEFAULT_VAT_RATE' => Configuration::get('STORNO_DEFAULT_VAT_RATE') !== false ? Configuration::get('STORNO_DEFAULT_VAT_RATE') : '21',
+            'STORNO_SHIPPING_VAT_RATE' => Configuration::get('STORNO_SHIPPING_VAT_RATE') !== false ? Configuration::get('STORNO_SHIPPING_VAT_RATE') : '21',
+            'STORNO_DEFAULT_UNIT' => Configuration::get('STORNO_DEFAULT_UNIT') !== false ? Configuration::get('STORNO_DEFAULT_UNIT') : 'buc',
             'STORNO_INVOICE_NOTES' => Configuration::get('STORNO_INVOICE_NOTES'),
             'STORNO_INTERNAL_NOTE_FORMAT' => Configuration::get('STORNO_INTERNAL_NOTE_FORMAT') ?: 'PrestaShop #{reference}',
         ]);
@@ -670,7 +670,8 @@ class StornoInvoicing extends Module
             $clientId = $this->ensureClient($api, $order);
             $lines = $this->buildInvoiceLines($order);
 
-            $paymentTermDays = (int) (Configuration::get('STORNO_PAYMENT_TERM_DAYS') ?: 30);
+            $ptVal = Configuration::get('STORNO_PAYMENT_TERM_DAYS');
+            $paymentTermDays = (int) ($ptVal !== false ? $ptVal : 30);
             $currency = new Currency($order->id_currency);
 
             $internalNote = $this->formatInternalNote($order);
@@ -800,8 +801,10 @@ class StornoInvoicing extends Module
     private function buildInvoiceLines(Order $order): array
     {
         $lines = [];
-        $defaultVat = (float) (Configuration::get('STORNO_DEFAULT_VAT_RATE') ?: 21);
-        $unit = Configuration::get('STORNO_DEFAULT_UNIT') ?: 'buc';
+        $val = Configuration::get('STORNO_DEFAULT_VAT_RATE');
+        $defaultVat = (float) ($val !== false ? $val : 21);
+        $unitVal = Configuration::get('STORNO_DEFAULT_UNIT');
+        $unit = $unitVal !== false ? $unitVal : 'buc';
 
         foreach ($order->getProductsDetail() as $product) {
             $vatRate = (float) $product['tax_rate'];
@@ -827,9 +830,10 @@ class StornoInvoicing extends Module
         // Shipping
         $shippingCost = (float) $order->total_shipping_tax_excl;
         if ($shippingCost > 0) {
-            $shippingVat = (float) (Configuration::get('STORNO_SHIPPING_VAT_RATE') ?: 21);
+            $svVal = Configuration::get('STORNO_SHIPPING_VAT_RATE');
+            $shippingVat = (float) ($svVal !== false ? $svVal : 21);
             $lines[] = [
-                'description' => Configuration::get('STORNO_SHIPPING_LABEL') ?: 'Transport',
+                'description' => Configuration::get('STORNO_SHIPPING_LABEL') !== false ? Configuration::get('STORNO_SHIPPING_LABEL') : 'Transport',
                 'quantity' => 1,
                 'unitPrice' => round($shippingCost, 4),
                 'vatRate' => $shippingVat,
@@ -841,7 +845,7 @@ class StornoInvoicing extends Module
         $totalDiscounts = (float) $order->total_discounts_tax_excl;
         if ($totalDiscounts > 0) {
             $lines[] = [
-                'description' => Configuration::get('STORNO_DISCOUNT_LABEL') ?: 'Discount',
+                'description' => Configuration::get('STORNO_DISCOUNT_LABEL') !== false ? Configuration::get('STORNO_DISCOUNT_LABEL') : 'Discount',
                 'quantity' => 1,
                 'unitPrice' => -round($totalDiscounts, 4),
                 'vatRate' => $defaultVat,
@@ -853,7 +857,7 @@ class StornoInvoicing extends Module
         $wrappingCost = (float) $order->total_wrapping_tax_excl;
         if ($wrappingCost > 0) {
             $lines[] = [
-                'description' => Configuration::get('STORNO_WRAPPING_LABEL') ?: 'Ambalare cadou',
+                'description' => Configuration::get('STORNO_WRAPPING_LABEL') !== false ? Configuration::get('STORNO_WRAPPING_LABEL') : 'Ambalare cadou',
                 'quantity' => 1,
                 'unitPrice' => round($wrappingCost, 4),
                 'vatRate' => $defaultVat,
@@ -874,7 +878,8 @@ class StornoInvoicing extends Module
             'paypal' => Configuration::get('STORNO_PM_PAYPAL') ?: 'card',
         ];
 
-        return $map[$module] ?? (Configuration::get('STORNO_PM_DEFAULT') ?: 'other');
+        $pmDefault = Configuration::get('STORNO_PM_DEFAULT');
+        return $map[$module] ?? ($pmDefault !== false ? $pmDefault : 'other');
     }
 
     private function formatInternalNote(Order $order): string
