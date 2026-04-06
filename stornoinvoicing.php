@@ -59,7 +59,7 @@ class StornoInvoicing extends Module
         $this->version = '1.1.0';
         $this->author = 'Storno';
         $this->need_instance = 0;
-        $this->ps_versions_compliancy = ['min' => '1.7.0.0', 'max' => '8.99.99'];
+        $this->ps_versions_compliancy = ['min' => '1.7.0.0', 'max' => '9.99.99'];
         $this->bootstrap = true;
 
         parent::__construct();
@@ -207,7 +207,8 @@ class StornoInvoicing extends Module
     {
         try {
             $api = $this->getApi();
-            $companies = $api->listCompanies();
+            $response = $api->listCompanies();
+            $companies = $response['data'] ?? $response;
             $names = array_map(function ($c) { return $c['name'] ?? $c['id']; }, $companies);
             return $this->displayConfirmation(
                 $this->l('Connection successful! Companies: ') . implode(', ', $names)
@@ -421,17 +422,17 @@ class StornoInvoicing extends Module
         ];
 
         return $this->buildHelper('submitStornoInvoice', $fields, [
-            'STORNO_TRIGGER_STATUS' => Configuration::get('STORNO_TRIGGER_STATUS') ?: 2,
+            'STORNO_TRIGGER_STATUS' => $this->getConfigOrDefault('STORNO_TRIGGER_STATUS', 2),
             'STORNO_AUTO_ISSUE' => Configuration::get('STORNO_AUTO_ISSUE'),
             'STORNO_AUTO_APPLY_VAT_RULES' => Configuration::get('STORNO_AUTO_APPLY_VAT_RULES'),
             'STORNO_DOCUMENT_SERIES_ID' => Configuration::get('STORNO_DOCUMENT_SERIES_ID'),
             'STORNO_INVOICE_LANGUAGE' => Configuration::get('STORNO_INVOICE_LANGUAGE'),
-            'STORNO_PAYMENT_TERM_DAYS' => Configuration::get('STORNO_PAYMENT_TERM_DAYS') !== false ? Configuration::get('STORNO_PAYMENT_TERM_DAYS') : 30,
-            'STORNO_DEFAULT_VAT_RATE' => Configuration::get('STORNO_DEFAULT_VAT_RATE') !== false ? Configuration::get('STORNO_DEFAULT_VAT_RATE') : '21',
-            'STORNO_SHIPPING_VAT_RATE' => Configuration::get('STORNO_SHIPPING_VAT_RATE') !== false ? Configuration::get('STORNO_SHIPPING_VAT_RATE') : '21',
-            'STORNO_DEFAULT_UNIT' => Configuration::get('STORNO_DEFAULT_UNIT') !== false ? Configuration::get('STORNO_DEFAULT_UNIT') : 'buc',
+            'STORNO_PAYMENT_TERM_DAYS' => $this->getConfigOrDefault('STORNO_PAYMENT_TERM_DAYS', 30),
+            'STORNO_DEFAULT_VAT_RATE' => $this->getConfigOrDefault('STORNO_DEFAULT_VAT_RATE', '21'),
+            'STORNO_SHIPPING_VAT_RATE' => $this->getConfigOrDefault('STORNO_SHIPPING_VAT_RATE', '21'),
+            'STORNO_DEFAULT_UNIT' => $this->getConfigOrDefault('STORNO_DEFAULT_UNIT', 'buc'),
             'STORNO_INVOICE_NOTES' => Configuration::get('STORNO_INVOICE_NOTES'),
-            'STORNO_INTERNAL_NOTE_FORMAT' => Configuration::get('STORNO_INTERNAL_NOTE_FORMAT') ?: 'PrestaShop #{reference}',
+            'STORNO_INTERNAL_NOTE_FORMAT' => $this->getConfigOrDefault('STORNO_INTERNAL_NOTE_FORMAT', 'PrestaShop #{reference}'),
         ]);
     }
 
@@ -470,9 +471,9 @@ class StornoInvoicing extends Module
         ];
 
         return $this->buildHelper('submitStornoLabels', $fields, [
-            'STORNO_SHIPPING_LABEL' => Configuration::get('STORNO_SHIPPING_LABEL') ?: 'Transport',
-            'STORNO_DISCOUNT_LABEL' => Configuration::get('STORNO_DISCOUNT_LABEL') ?: 'Discount',
-            'STORNO_WRAPPING_LABEL' => Configuration::get('STORNO_WRAPPING_LABEL') ?: 'Ambalare cadou',
+            'STORNO_SHIPPING_LABEL' => $this->getConfigOrDefault('STORNO_SHIPPING_LABEL', 'Transport'),
+            'STORNO_DISCOUNT_LABEL' => $this->getConfigOrDefault('STORNO_DISCOUNT_LABEL', 'Discount'),
+            'STORNO_WRAPPING_LABEL' => $this->getConfigOrDefault('STORNO_WRAPPING_LABEL', 'Ambalare cadou'),
         ]);
     }
 
@@ -515,12 +516,12 @@ class StornoInvoicing extends Module
         ];
 
         return $this->buildHelper('submitStornoPayments', $fields, [
-            'STORNO_PM_WIREPAYMENT' => Configuration::get('STORNO_PM_WIREPAYMENT') ?: 'bank_transfer',
-            'STORNO_PM_CHECKPAYMENT' => Configuration::get('STORNO_PM_CHECKPAYMENT') ?: 'cheque',
-            'STORNO_PM_CASHONDELIVERY' => Configuration::get('STORNO_PM_CASHONDELIVERY') ?: 'cash',
-            'STORNO_PM_STRIPE' => Configuration::get('STORNO_PM_STRIPE') ?: 'card',
-            'STORNO_PM_PAYPAL' => Configuration::get('STORNO_PM_PAYPAL') ?: 'card',
-            'STORNO_PM_DEFAULT' => Configuration::get('STORNO_PM_DEFAULT') ?: 'other',
+            'STORNO_PM_WIREPAYMENT' => $this->getConfigOrDefault('STORNO_PM_WIREPAYMENT', 'bank_transfer'),
+            'STORNO_PM_CHECKPAYMENT' => $this->getConfigOrDefault('STORNO_PM_CHECKPAYMENT', 'cheque'),
+            'STORNO_PM_CASHONDELIVERY' => $this->getConfigOrDefault('STORNO_PM_CASHONDELIVERY', 'cash'),
+            'STORNO_PM_STRIPE' => $this->getConfigOrDefault('STORNO_PM_STRIPE', 'card'),
+            'STORNO_PM_PAYPAL' => $this->getConfigOrDefault('STORNO_PM_PAYPAL', 'card'),
+            'STORNO_PM_DEFAULT' => $this->getConfigOrDefault('STORNO_PM_DEFAULT', 'other'),
         ]);
     }
 
@@ -670,8 +671,7 @@ class StornoInvoicing extends Module
             $clientId = $this->ensureClient($api, $order);
             $lines = $this->buildInvoiceLines($order);
 
-            $ptVal = Configuration::get('STORNO_PAYMENT_TERM_DAYS');
-            $paymentTermDays = (int) ($ptVal !== false ? $ptVal : 30);
+            $paymentTermDays = (int) $this->getConfigOrDefault('STORNO_PAYMENT_TERM_DAYS', 30);
             $currency = new Currency($order->id_currency);
 
             $internalNote = $this->formatInternalNote($order);
@@ -801,10 +801,8 @@ class StornoInvoicing extends Module
     private function buildInvoiceLines(Order $order): array
     {
         $lines = [];
-        $val = Configuration::get('STORNO_DEFAULT_VAT_RATE');
-        $defaultVat = (float) ($val !== false ? $val : 21);
-        $unitVal = Configuration::get('STORNO_DEFAULT_UNIT');
-        $unit = $unitVal !== false ? $unitVal : 'buc';
+        $defaultVat = (float) $this->getConfigOrDefault('STORNO_DEFAULT_VAT_RATE', 21);
+        $unit = $this->getConfigOrDefault('STORNO_DEFAULT_UNIT', 'buc');
 
         foreach ($order->getProductsDetail() as $product) {
             $vatRate = (float) $product['tax_rate'];
@@ -830,10 +828,9 @@ class StornoInvoicing extends Module
         // Shipping
         $shippingCost = (float) $order->total_shipping_tax_excl;
         if ($shippingCost > 0) {
-            $svVal = Configuration::get('STORNO_SHIPPING_VAT_RATE');
-            $shippingVat = (float) ($svVal !== false ? $svVal : 21);
+            $shippingVat = (float) $this->getConfigOrDefault('STORNO_SHIPPING_VAT_RATE', 21);
             $lines[] = [
-                'description' => Configuration::get('STORNO_SHIPPING_LABEL') !== false ? Configuration::get('STORNO_SHIPPING_LABEL') : 'Transport',
+                'description' => $this->getConfigOrDefault('STORNO_SHIPPING_LABEL', 'Transport'),
                 'quantity' => 1,
                 'unitPrice' => round($shippingCost, 4),
                 'vatRate' => $shippingVat,
@@ -845,7 +842,7 @@ class StornoInvoicing extends Module
         $totalDiscounts = (float) $order->total_discounts_tax_excl;
         if ($totalDiscounts > 0) {
             $lines[] = [
-                'description' => Configuration::get('STORNO_DISCOUNT_LABEL') !== false ? Configuration::get('STORNO_DISCOUNT_LABEL') : 'Discount',
+                'description' => $this->getConfigOrDefault('STORNO_DISCOUNT_LABEL', 'Discount'),
                 'quantity' => 1,
                 'unitPrice' => -round($totalDiscounts, 4),
                 'vatRate' => $defaultVat,
@@ -857,7 +854,7 @@ class StornoInvoicing extends Module
         $wrappingCost = (float) $order->total_wrapping_tax_excl;
         if ($wrappingCost > 0) {
             $lines[] = [
-                'description' => Configuration::get('STORNO_WRAPPING_LABEL') !== false ? Configuration::get('STORNO_WRAPPING_LABEL') : 'Ambalare cadou',
+                'description' => $this->getConfigOrDefault('STORNO_WRAPPING_LABEL', 'Ambalare cadou'),
                 'quantity' => 1,
                 'unitPrice' => round($wrappingCost, 4),
                 'vatRate' => $defaultVat,
@@ -871,20 +868,19 @@ class StornoInvoicing extends Module
     private function mapPaymentMethod(string $module): string
     {
         $map = [
-            'ps_wirepayment' => Configuration::get('STORNO_PM_WIREPAYMENT') ?: 'bank_transfer',
-            'ps_checkpayment' => Configuration::get('STORNO_PM_CHECKPAYMENT') ?: 'cheque',
-            'ps_cashondelivery' => Configuration::get('STORNO_PM_CASHONDELIVERY') ?: 'cash',
-            'stripe' => Configuration::get('STORNO_PM_STRIPE') ?: 'card',
-            'paypal' => Configuration::get('STORNO_PM_PAYPAL') ?: 'card',
+            'ps_wirepayment' => $this->getConfigOrDefault('STORNO_PM_WIREPAYMENT', 'bank_transfer'),
+            'ps_checkpayment' => $this->getConfigOrDefault('STORNO_PM_CHECKPAYMENT', 'cheque'),
+            'ps_cashondelivery' => $this->getConfigOrDefault('STORNO_PM_CASHONDELIVERY', 'cash'),
+            'stripe' => $this->getConfigOrDefault('STORNO_PM_STRIPE', 'card'),
+            'paypal' => $this->getConfigOrDefault('STORNO_PM_PAYPAL', 'card'),
         ];
 
-        $pmDefault = Configuration::get('STORNO_PM_DEFAULT');
-        return $map[$module] ?? ($pmDefault !== false ? $pmDefault : 'other');
+        return $map[$module] ?? $this->getConfigOrDefault('STORNO_PM_DEFAULT', 'other');
     }
 
     private function formatInternalNote(Order $order): string
     {
-        $format = Configuration::get('STORNO_INTERNAL_NOTE_FORMAT') ?: 'PrestaShop #{reference}';
+        $format = $this->getConfigOrDefault('STORNO_INTERNAL_NOTE_FORMAT', 'PrestaShop #{reference}');
 
         return str_replace(
             ['{reference}', '{id}'],
@@ -894,6 +890,16 @@ class StornoInvoicing extends Module
     }
 
     // ─── Helpers ─────────────────────────────────────────────────
+
+    /**
+     * Get a config value, returning $default only when the key does not exist.
+     * Preserves falsy values like 0, '0', '' that the user intentionally set.
+     */
+    private function getConfigOrDefault(string $key, $default)
+    {
+        $val = Configuration::get($key);
+        return $val !== false ? $val : $default;
+    }
 
     private function getApi(): StornoApi
     {
