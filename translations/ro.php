@@ -1,16 +1,19 @@
 <?php
-/**
- * Storno Invoicing - Romanian translations
- *
- * Key format: $_MODULE['<stornoinvoicing>{filename}_{md5(english_string)}']
- *
- * Strings from stornoinvoicing.php use prefix: <stornoinvoicing>stornoinvoicing_
- * Strings from views/templates/hook/admin_order.tpl use prefix: <stornoinvoicing>admin_order_
- *
- * @author  Storno <support@storno.ro>
- * @license MIT
- */
 
+/**
+ * Copyright since 2024 Storno
+ *
+ * NOTICE OF LICENSE
+ *
+ * This source file is subject to the MIT License
+ * that is bundled with this package in the file LICENSE.
+ * It is also available through the world-wide-web at this URL:
+ * https://opensource.org/licenses/MIT
+ *
+ * @author    Storno <support@storno.ro>
+ * @copyright Since 2024 Storno
+ * @license   https://opensource.org/licenses/MIT MIT License
+ */
 global $_MODULE;
 $_MODULE = [];
 
@@ -146,3 +149,15 @@ $_MODULE['<stornoinvoicing>admin_order_' . md5('Status')] = 'Status';
 $_MODULE['<stornoinvoicing>admin_order_' . md5('Error')] = 'Eroare';
 $_MODULE['<stornoinvoicing>admin_order_' . md5('Created')] = 'Creat';
 $_MODULE['<stornoinvoicing>admin_order_' . md5('Not yet assigned')] = 'Inca neatribuit';
+
+// Strings moved to views/templates/admin/actions.tpl
+$_MODULE['<stornoinvoicing>actions_' . md5('Actions')] = 'Actiuni';
+$_MODULE['<stornoinvoicing>actions_' . md5('Registered')] = 'Inregistrat';
+$_MODULE['<stornoinvoicing>actions_' . md5('Not registered')] = 'Neinregistrat';
+$_MODULE['<stornoinvoicing>actions_' . md5('Webhook:')] = 'Webhook:';
+$_MODULE['<stornoinvoicing>actions_' . md5('The webhook allows Storno to notify PrestaShop when an invoice is validated/rejected by ANAF or when a payment is recorded.')] = 'Webhook-ul permite Storno sa notifice PrestaShop cand o factura este validata/respinsa de ANAF sau cand se inregistreaza o plata.';
+$_MODULE['<stornoinvoicing>actions_' . md5('Webhooks documentation')] = 'Documentatie webhooks';
+$_MODULE['<stornoinvoicing>actions_' . md5('Register Webhook')] = 'Inregistreaza Webhook';
+$_MODULE['<stornoinvoicing>actions_' . md5('Test API connection:')] = 'Test conexiune API:';
+$_MODULE['<stornoinvoicing>actions_' . md5('Checks whether API URL, API Key and Company UUID are correct and Storno is reachable.')] = 'Verifica daca API URL, API Key si Company UUID sunt corecte si Storno este accesibil.';
+$_MODULE['<stornoinvoicing>actions_' . md5('Test Connection')] = 'Testeaza Conexiunea';

@@ -1,13 +1,19 @@
 <?php
-/**
- * Storno API Client for PrestaShop
- *
- * Handles all communication with the Storno REST API.
- *
- * @author  Storno <support@storno.ro>
- * @license MIT
- */
 
+/**
+ * Copyright since 2024 Storno
+ *
+ * NOTICE OF LICENSE
+ *
+ * This source file is subject to the MIT License
+ * that is bundled with this package in the file LICENSE.
+ * It is also available through the world-wide-web at this URL:
+ * https://opensource.org/licenses/MIT
+ *
+ * @author    Storno <support@storno.ro>
+ * @copyright Since 2024 Storno
+ * @license   https://opensource.org/licenses/MIT MIT License
+ */
 if (!defined('_PS_VERSION_')) {
     exit;
 }
@@ -28,9 +34,9 @@ class StornoApi
     /**
      * Generic API request
      *
-     * @param string     $method   HTTP method (GET, POST, PUT, DELETE)
-     * @param string     $endpoint API endpoint path
-     * @param array|null $body     Request body (JSON-encoded)
+     * @param string $method HTTP method (GET, POST, PUT, DELETE)
+     * @param string $endpoint API endpoint path
+     * @param array|null $body Request body (JSON-encoded)
      *
      * @return array Decoded response
      *
@@ -68,7 +74,7 @@ class StornoApi
         curl_close($ch);
 
         if ($curlError) {
-            throw new \RuntimeException('cURL error: ' . $curlError);
+            throw new RuntimeException('cURL error: ' . $curlError);
         }
 
         $decoded = json_decode($response, true);
@@ -86,7 +92,7 @@ class StornoApi
                 }
                 $message .= ': ' . implode('; ', $violations);
             }
-            throw new \RuntimeException($message);
+            throw new RuntimeException($message);
         }
 
         return $decoded ?: [];
@@ -117,11 +123,11 @@ class StornoApi
         curl_close($ch);
 
         if ($curlError) {
-            throw new \RuntimeException('cURL error: ' . $curlError);
+            throw new RuntimeException('cURL error: ' . $curlError);
         }
 
         if ($httpCode >= 400) {
-            throw new \RuntimeException('HTTP ' . $httpCode . ' downloading resource');
+            throw new RuntimeException('HTTP ' . $httpCode . ' downloading resource');
         }
 
         return $response;

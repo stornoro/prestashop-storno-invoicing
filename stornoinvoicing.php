@@ -1,14 +1,19 @@
 <?php
-/**
- * Storno Invoicing - PrestaShop Module
- *
- * Automatically creates and manages invoices via the Storno API
- * when orders are placed in PrestaShop.
- *
- * @author  Storno <support@storno.ro>
- * @license MIT
- */
 
+/**
+ * Copyright since 2024 Storno
+ *
+ * NOTICE OF LICENSE
+ *
+ * This source file is subject to the MIT License
+ * that is bundled with this package in the file LICENSE.
+ * It is also available through the world-wide-web at this URL:
+ * https://opensource.org/licenses/MIT
+ *
+ * @author    Storno <support@storno.ro>
+ * @copyright Since 2024 Storno
+ * @license   https://opensource.org/licenses/MIT MIT License
+ */
 if (!defined('_PS_VERSION_')) {
     exit;
 }
@@ -18,7 +23,7 @@ require_once dirname(__FILE__) . '/classes/StornoApi.php';
 class StornoInvoicing extends Module
 {
     /** All configuration keys used by this module */
-    const CONFIG_KEYS = [
+    public const CONFIG_KEYS = [
         // Connection
         'STORNO_API_URL',
         'STORNO_API_KEY',
@@ -210,10 +215,11 @@ class StornoInvoicing extends Module
             $response = $api->listCompanies();
             $companies = $response['data'] ?? $response;
             $names = array_map(function ($c) { return $c['name'] ?? $c['id']; }, $companies);
+
             return $this->displayConfirmation(
                 $this->l('Connection successful! Companies: ') . implode(', ', $names)
             );
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return $this->displayError($this->l('Connection failed: ') . $e->getMessage());
         }
     }
@@ -222,7 +228,7 @@ class StornoInvoicing extends Module
     {
         try {
             $api = $this->getApi();
-            $webhookUrl = Context::getContext()->link->getModuleLink($this->name, 'webhook', [], true);
+            $webhookUrl = $this->context->link->getModuleLink($this->name, 'webhook', [], true);
 
             $result = $api->createWebhook([
                 'url' => $webhookUrl,
@@ -243,7 +249,7 @@ class StornoInvoicing extends Module
             return $this->displayConfirmation(
                 $this->l('Webhook registered at: ') . $webhookUrl
             );
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return $this->displayError($this->l('Webhook registration failed: ') . $e->getMessage());
         }
     }
@@ -311,7 +317,7 @@ class StornoInvoicing extends Module
                 $label = ($s['prefix'] ?? '') . ' — ' . ($s['name'] ?? $s['id']);
                 $seriesOptions[] = ['id' => $s['id'], 'name' => $label];
             }
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             // API not configured yet — show only default
         }
 
@@ -529,39 +535,13 @@ class StornoInvoicing extends Module
 
     private function renderActionButtons()
     {
-        $webhookStatus = Configuration::get('STORNO_WEBHOOK_SECRET')
-            ? '<span class="badge badge-success">' . $this->l('Registered') . '</span>'
-            : '<span class="badge badge-warning">' . $this->l('Not registered') . '</span>';
+        $this->context->smarty->assign([
+            'storno_webhook_registered' => (bool) Configuration::get('STORNO_WEBHOOK_SECRET'),
+            'storno_form_action' => AdminController::$currentIndex . '&configure=' . $this->name . '&token=' . Tools::getAdminTokenLite('AdminModules'),
+            'storno_docs_url' => 'https://docs.storno.ro/concepts/webhooks-events',
+        ]);
 
-        $currentIndex = AdminController::$currentIndex . '&configure=' . $this->name;
-        $token = Tools::getAdminTokenLite('AdminModules');
-
-        return '
-        <div class="panel">
-            <div class="panel-heading"><i class="icon-link"></i> ' . $this->l('Actions') . '</div>
-            <div class="form-wrapper">
-                <div class="row">
-                    <div class="col-lg-6">
-                        <p><strong>' . $this->l('Webhook:') . '</strong> ' . $webhookStatus . '</p>
-                        <p class="help-block">' . $this->l('The webhook allows Storno to notify PrestaShop when an invoice is validated/rejected by ANAF or when a payment is recorded.') . ' <a href="https://docs.storno.ro/concepts/webhooks-events" target="_blank">' . $this->l('Webhooks documentation') . '</a></p>
-                        <form method="post" action="' . $currentIndex . '&token=' . $token . '">
-                            <button type="submit" name="submitStornoRegisterWebhook" class="btn btn-default">
-                                <i class="icon-refresh"></i> ' . $this->l('Register Webhook') . '
-                            </button>
-                        </form>
-                    </div>
-                    <div class="col-lg-6">
-                        <p><strong>' . $this->l('Test API connection:') . '</strong></p>
-                        <p class="help-block">' . $this->l('Checks whether API URL, API Key and Company UUID are correct and Storno is reachable.') . '</p>
-                        <form method="post" action="' . $currentIndex . '&token=' . $token . '">
-                            <button type="submit" name="submitStornoTestConnection" class="btn btn-default">
-                                <i class="icon-check"></i> ' . $this->l('Test Connection') . '
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>';
+        return $this->display(__FILE__, 'views/templates/admin/actions.tpl');
     }
 
     // ─── Form Helper ─────────────────────────────────────────────
@@ -662,6 +642,7 @@ class StornoInvoicing extends Module
                 'Storno: Cannot create invoice - module not configured',
                 3, null, 'Order', $order->id
             );
+
             return;
         }
 
@@ -736,7 +717,7 @@ class StornoInvoicing extends Module
                 'Storno: Invoice ' . $invoiceNumber . ' created for order #' . $order->reference,
                 1, null, 'Order', $order->id
             );
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Db::getInstance()->insert('storno_invoices', [
                 'id_order' => (int) $order->id,
                 'storno_invoice_id' => '',
@@ -898,6 +879,7 @@ class StornoInvoicing extends Module
     private function getConfigOrDefault(string $key, $default)
     {
         $val = Configuration::get($key);
+
         return $val !== false ? $val : $default;
     }
 

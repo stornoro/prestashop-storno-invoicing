@@ -1,14 +1,19 @@
 <?php
-/**
- * Storno Webhook Controller
- *
- * Receives webhook events from the Storno API and updates
- * the corresponding PrestaShop order records.
- *
- * @author  Storno <support@storno.ro>
- * @license MIT
- */
 
+/**
+ * Copyright since 2024 Storno
+ *
+ * NOTICE OF LICENSE
+ *
+ * This source file is subject to the MIT License
+ * that is bundled with this package in the file LICENSE.
+ * It is also available through the world-wide-web at this URL:
+ * https://opensource.org/licenses/MIT
+ *
+ * @author    Storno <support@storno.ro>
+ * @copyright Since 2024 Storno
+ * @license   https://opensource.org/licenses/MIT MIT License
+ */
 if (!defined('_PS_VERSION_')) {
     exit;
 }
@@ -32,12 +37,14 @@ class StornoInvoicingWebhookModuleFrontController extends ModuleFrontController
         // Only accept POST
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             $this->respond(405, ['error' => 'Method not allowed']);
+
             return;
         }
 
         $payload = file_get_contents('php://input');
         if (empty($payload)) {
             $this->respond(400, ['error' => 'Empty payload']);
+
             return;
         }
 
@@ -48,6 +55,7 @@ class StornoInvoicingWebhookModuleFrontController extends ModuleFrontController
         if (!$secret) {
             PrestaShopLogger::addLog('Storno webhook: No secret configured', 3);
             $this->respond(500, ['error' => 'Webhook not configured']);
+
             return;
         }
 
@@ -55,6 +63,7 @@ class StornoInvoicingWebhookModuleFrontController extends ModuleFrontController
         if (!hash_equals($expected, $signature)) {
             PrestaShopLogger::addLog('Storno webhook: Invalid signature', 2);
             $this->respond(401, ['error' => 'Invalid signature']);
+
             return;
         }
 
@@ -62,6 +71,7 @@ class StornoInvoicingWebhookModuleFrontController extends ModuleFrontController
         $event = json_decode($payload, true);
         if (!$event || !isset($event['event']) || !isset($event['data'])) {
             $this->respond(400, ['error' => 'Invalid payload']);
+
             return;
         }
 
@@ -71,6 +81,7 @@ class StornoInvoicingWebhookModuleFrontController extends ModuleFrontController
 
         if (!$invoiceId) {
             $this->respond(200, ['status' => 'ignored', 'reason' => 'no invoice id']);
+
             return;
         }
 
@@ -83,6 +94,7 @@ class StornoInvoicingWebhookModuleFrontController extends ModuleFrontController
         if (!$mapping) {
             // Could be an invoice not created via PrestaShop
             $this->respond(200, ['status' => 'ignored', 'reason' => 'no matching order']);
+
             return;
         }
 
