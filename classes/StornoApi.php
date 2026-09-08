@@ -3,6 +3,9 @@
  * Storno API Client for PrestaShop
  *
  * Handles all communication with the Storno REST API.
+ *
+ * @author  Storno <support@storno.ro>
+ * @license MIT
  */
 
 if (!defined('_PS_VERSION_')) {

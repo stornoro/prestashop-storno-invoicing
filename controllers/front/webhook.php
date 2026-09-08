@@ -4,6 +4,9 @@
  *
  * Receives webhook events from the Storno API and updates
  * the corresponding PrestaShop order records.
+ *
+ * @author  Storno <support@storno.ro>
+ * @license MIT
  */
 
 if (!defined('_PS_VERSION_')) {

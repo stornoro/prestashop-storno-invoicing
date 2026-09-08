@@ -6,6 +6,9 @@
  *
  * Strings from stornoinvoicing.php use prefix: <stornoinvoicing>stornoinvoicing_
  * Strings from views/templates/hook/admin_order.tpl use prefix: <stornoinvoicing>admin_order_
+ *
+ * @author  Storno <support@storno.ro>
+ * @license MIT
  */
 
 global $_MODULE;

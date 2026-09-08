@@ -843,8 +843,8 @@ class StornoInvoicing extends Module
         if ($totalDiscounts > 0) {
             $lines[] = [
                 'description' => $this->getConfigOrDefault('STORNO_DISCOUNT_LABEL', 'Discount'),
-                'quantity' => 1,
-                'unitPrice' => -round($totalDiscounts, 4),
+                'quantity' => -1,
+                'unitPrice' => round($totalDiscounts, 4),
                 'vatRate' => $defaultVat,
                 'unitOfMeasure' => $unit,
             ];

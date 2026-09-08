@@ -1,6 +1,9 @@
 <?php
 /**
  * Database table removal
+ *
+ * @author  Storno <support@storno.ro>
+ * @license MIT
  */
 
 if (!defined('_PS_VERSION_')) {
