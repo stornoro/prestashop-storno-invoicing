@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Copyright since 2024 Storno
  *
@@ -61,7 +60,7 @@ class StornoInvoicing extends Module
     {
         $this->name = 'stornoinvoicing';
         $this->tab = 'billing_invoicing';
-        $this->version = '1.1.0';
+        $this->version = '1.1.1';
         $this->author = 'Storno';
         $this->need_instance = 0;
         $this->ps_versions_compliancy = ['min' => '1.7.0.0', 'max' => '9.99.99'];

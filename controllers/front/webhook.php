@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Copyright since 2024 Storno
  *
